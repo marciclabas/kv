@@ -27,9 +27,10 @@ class DictKV(KV[T], Generic[T]):
     else:
       return Left(InexistentItem(key))
     
-  @P.lift
+  @AI.lift
   async def keys(self):
-    return Right(list(self.xs.keys()))
+    for key in self.xs.keys():
+      yield Right(key)
 
   @AI.lift
   async def items(self):

@@ -56,19 +56,27 @@ class KV(ABC, Generic[T]):
   def delete(self, key: str) -> Promise[Either[DBError | InexistentItem, None]]:
     """Delete item with key `key`. Returns `Left[InexistentItem]` if the item does not exist."""
 
-  @abstractmethod
-  def items(self) -> AsyncIter[Either[DBError | InvalidData, tuple[str, T]]]:
+  @AI.lift
+  async def items(self) -> AsyncIterable[Either[DBError | InvalidData, tuple[str, T]]]:
     """Iterate over all items in the `KV`"""
+    @E.do[DBError|InvalidData]()
+    async def fetch_one(key: Either[DBError, str]):
+      k = key.unsafe()
+      return k, (await self.read(k)).unsafe()
+    async for e in self.keys():
+      yield (await fetch_one(e))
 
   @P.lift
   @E.do[DBError]()
   async def has(self, key: str):
     """Does the `KV` have `key`?"""
-    keys = (await self.keys()).unsafe()
-    return key in keys
+    async for k in self.keys().map(E.unsafe):
+      if k == key:
+        return True
+    return False
   
   @abstractmethod
-  def keys(self) -> Promise[Either[DBError, Sequence[str]]]:
+  def keys(self) -> AsyncIter[Either[DBError, str]]:
     """Read all keys in the `KV`"""
 
   @AI.lift
@@ -94,6 +102,5 @@ class KV(ABC, Generic[T]):
   @E.do[DBError]()
   async def clear(self):
     """Delete all entries"""
-    keys = (await self.keys()).unsafe()
-    for key in keys:
+    async for key in self.keys().map(E.unsafe):
       (await self.delete(key)).unsafe()

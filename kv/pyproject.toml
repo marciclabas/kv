@@ -18,8 +18,5 @@ readme = {file="README.md", content-type="text/markdown"}
 [project.urls]
 repo = "https://github.com/marciclabas/kv.git"
 
-# [project.optional-dependencies]
-# test = [
-#   "pytest < 5.0.0",
-#   "pytest-cov[all]"
-# ]
+[project.optional-dependencies]
+fs = ["fs-tools"]

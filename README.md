@@ -38,7 +38,11 @@ await kv.insert('key', MySerializableType(1, '2')) # Left[ValidationError] | Rig
 ```
 
 ## TODO
-- Single package
+- ABC: OK
+- Dict: OK
+- Filesystem: OK
+- SQL
+- HTTP
 - `kv serve` CLI
 - `BlobKV` with prefix
 - Deptrecate sqlite in favor of SQLAlchemy
