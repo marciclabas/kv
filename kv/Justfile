@@ -9,6 +9,7 @@ help:
 build:
   cd {{PKG}} && \
   rm -drf dist && \
+  cp ../README.md . && \
   {{PYTHON}} -m build && \
   rm -drf build
 

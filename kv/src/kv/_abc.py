@@ -31,8 +31,8 @@ T = TypeVar('T')
 class KV(ABC, Generic[T]):
   """Async, exception-free key-value store ABC"""
   
-  @classmethod
-  def of(cls, conn_str: str, type: type[T] | None = None) -> 'KV[T]':
+  @staticmethod
+  def of(conn_str: str, type: type[T] | None = None) -> 'KV[T]':
     """Create a KV from a connection string. Supports:
     - `file://<path>`: `FilesystemKV`
     - `sql+<protocol>://<conn_str>;Table=<table>`: `SQLKV`
@@ -41,8 +41,8 @@ class KV(ABC, Generic[T]):
     - `https://<endpoint>` (or `http://<endpoint>`): `ClientKV`
     """
     ...
-    # from .conn_strings import parse
-    # return parse(conn_str, type)
+    from .conn_strings import parse
+    return parse(conn_str, type)
   
   @abstractmethod
   def insert(self, key: str, value: T) -> Promise[Either[DBError, None]]:

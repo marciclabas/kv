@@ -32,7 +32,7 @@ class MySerializableType:
   a: int
   b: str
 
-kv = KV.validated(MySerializableType, 'sqlite://...')
+kv = KV.of('sqlite://...', MySerializableType)
 await kv.insert('key', MySerializableType(1, '2')) # Left[ValidationError] | Right[None]
 # etc.
 ```
