@@ -32,18 +32,25 @@ class MySerializableType:
   a: int
   b: str
 
-kv = KV.of('sqlite://...', MySerializableType)
+kv = KV.of('sql+sqlite://...', MySerializableType)
 await kv.insert('key', MySerializableType(1, '2')) # Left[ValidationError] | Right[None]
 # etc.
 ```
+
+## CLI
+  
+```bash
+kv serve CONN_STR --token "shhhhh" --port 8080 --type dict
+```
+
 
 ## TODO
 - ABC: OK
 - Dict: OK
 - Filesystem: OK
-- SQL
-- HTTP
-- `kv serve` CLI
+- SQL: OK
+- HTTP: OK
+- `kv serve` CLI: OK
 - `BlobKV` with prefix
 - Deptrecate sqlite in favor of SQLAlchemy
 

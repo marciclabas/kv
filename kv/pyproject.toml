@@ -20,3 +20,9 @@ repo = "https://github.com/marciclabas/kv.git"
 
 [project.optional-dependencies]
 fs = ["fs-tools"]
+sql = ["sqlmodel"]
+server = ["fastapi", "uvicorn"]
+client = ["httpx"]
+
+[project.scripts]
+kv = "kv.cli:app"

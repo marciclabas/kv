@@ -39,6 +39,7 @@ class KV(ABC, Generic[T]):
     - `azure+blob://<conn_str>`: `BlobKV`
     - `azure+blob+container://<conn_str>;Container=<container_name>`: `BlobContainerKV`
     - `https://<endpoint>` (or `http://<endpoint>`): `ClientKV`
+    - `https://<endpoint>;Token=<token>` (or `http://<endpoint>;Token=<token>`): `ClientKV`
     """
     ...
     from .conn_strings import parse
