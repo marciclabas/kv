@@ -25,7 +25,18 @@ class FilesystemKV(KV[T], Generic[T]):
   base_path: str
   extension: str = ''
   parse: Callable[[bytes], Either[InvalidData, T]] = lambda x: x # type: ignore
-  dump: Callable[[T], bytes] = lambda x: x # type: ignore
+  dump: Callable[[T], str|bytes] = lambda x: x # type: ignore
+
+  @classmethod
+  def validated(cls, Type: type[T], base_path: str) -> 'FilesystemKV[T]':
+    from pydantic import RootModel
+    Model = RootModel[Type]
+    return FilesystemKV(
+      base_path=base_path, extension='.json',
+      parse=lambda b: E.validate_json(b, Model).fmap(lambda x: x.root).mapl(InvalidData),
+      dump=lambda x: Model(x).model_dump_json(exclude_none=True)
+    )
+
 
   def __post_init__(self):
     os.makedirs(self.base_path, exist_ok=True)
