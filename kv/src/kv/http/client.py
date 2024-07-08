@@ -1,12 +1,14 @@
-from typing import TypeVar, Generic, Any, Literal, AsyncIterable, Sequence, Callable
+from typing_extensions import TypeVar, Generic, Any, Literal, AsyncIterable, Sequence
+from dataclasses import dataclass
 from pydantic import TypeAdapter, RootModel, ValidationError
 from haskellian import either as E, Either, Left, Right, promise as P, asyn_iter as AI
 from kv import KV, InvalidData, ReadError, DBError
-from .req import Request, request
+from .req import Request, request as default_request
+from ..serialization import Parse, Dump, default, serializers
 
-A = TypeVar('A')
+T = TypeVar('T')
 ErrType = TypeAdapter(ReadError)
-SeqType = TypeAdapter(Sequence[str])
+SeqType = TypeAdapter(Sequence[Either[DBError, str]])
 
 def validate_left(raw_json: bytes, status: int) -> Left[DBError, Any]:
   try:
@@ -14,32 +16,23 @@ def validate_left(raw_json: bytes, status: int) -> Left[DBError, Any]:
   except ValidationError:
     return Left(DBError(f'Unexpected status code: {status}. Content: "{raw_json.decode()}"'))
   
-def validate_seq(raw_json: bytes) -> Either[DBError, Sequence[str]]:
+def validate_seq(raw_json: bytes):
   try:
-    return Right(SeqType.validate_json(raw_json))
+    return SeqType.validate_json(raw_json)
   except Exception as e:
-    return Left(DBError(e))
+    return [Left(DBError(e))]
 
-class ClientKV(KV[A], Generic[A]):
-  def __init__(
-    self, endpoint: str, *,
-    parse: Callable[[bytes], Either[InvalidData, A]] = Right, # type: ignore
-    dump: Callable[[A], bytes|str] = lambda x: x, # type: ignore
-    request: Request = request
-  ):
-    self.endpoint = endpoint
-    self.parse = parse
-    self.dump = dump
-    self.request = request
+@dataclass
+class ClientKV(KV[T], Generic[T]):
+  """HTTP-based client `KV` implementation"""
+  endpoint: str
+  parse: Parse[T] = default[T].parse
+  dump: Dump[T] = default[T].dump
+  request: Request = default_request
 
   @classmethod
-  def validated(cls, Type: type[A], endpoint: str, *, request: Request = request) -> 'ClientKV[A]':
-    Model = RootModel[Type]
-    return ClientKV(
-      endpoint=endpoint, request=request,
-      parse=lambda b: E.validate_json(b, Model).fmap(lambda x: x.root).mapl(InvalidData),
-      dump=lambda x: Model(x).model_dump_json(exclude_none=True),
-    )
+  def validated(cls, Type: type[T], endpoint: str, *, request: Request = request) -> 'ClientKV[T]':
+    return ClientKV(endpoint=endpoint, **serializers(Type), request=request)
   
   def __repr__(self):
     return f'ClientKV({self.endpoint})'
@@ -57,7 +50,7 @@ class ClientKV(KV[A], Generic[A]):
     return r.bind(self.parse)
   
   @P.lift
-  async def insert(self, key: str, value: A):
+  async def insert(self, key: str, value: T):
     r = await self._req('POST', f'insert?key={key}', data=self.dump(value))
     return r.fmap(lambda _: None)
     
@@ -74,9 +67,9 @@ class ClientKV(KV[A], Generic[A]):
   @AI.lift
   async def keys(self) -> AsyncIterable[Either[DBError, str]]:
     r = await self._req('GET', 'keys')
-    keys = r.bind(validate_seq)    
+    keys = r.fmap(validate_seq)  
     if keys.tag == 'left':
       yield Left(keys.value)
     else:
       for key in keys.value:
-        yield Right(key)
+        yield key

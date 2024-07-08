@@ -1,11 +1,10 @@
-from typing_extensions import TypeVar, Generic, Callable, ParamSpec, Awaitable
+from typing_extensions import TypeVar, Generic, ParamSpec
 from dataclasses import dataclass
-from functools import wraps
 import os
-from haskellian import Left, Right, Either, \
-  promise as P, asyn_iter as AI, either as E
+from haskellian import Left, Right, promise as P, asyn_iter as AI
 import fs
-from kv import KV, InvalidData, DBError, InexistentItem
+from kv import KV, DBError, InexistentItem
+from kv.serialization import Parse, Dump, default, serializers
 
 T = TypeVar('T')
 L = TypeVar('L')
@@ -24,19 +23,12 @@ class FilesystemKV(KV[T], Generic[T]):
 
   base_path: str
   extension: str = ''
-  parse: Callable[[bytes], Either[InvalidData, T]] = lambda x: x # type: ignore
-  dump: Callable[[T], str|bytes] = lambda x: x # type: ignore
+  parse: Parse[T] = default[T].parse
+  dump: Dump[T] = default[T].dump
 
   @classmethod
   def validated(cls, Type: type[T], base_path: str) -> 'FilesystemKV[T]':
-    from pydantic import RootModel
-    Model = RootModel[Type]
-    return FilesystemKV(
-      base_path=base_path, extension='.json',
-      parse=lambda b: E.validate_json(b, Model).fmap(lambda x: x.root).mapl(InvalidData),
-      dump=lambda x: Model(x).model_dump_json(exclude_none=True)
-    )
-
+    return FilesystemKV(base_path=base_path, extension='.json', **serializers(Type))
 
   def __post_init__(self):
     os.makedirs(self.base_path, exist_ok=True)

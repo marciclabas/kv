@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "python-kv"
-version = "0.1.0"
+version = "0.1.5"
 authors = [
   {name="Marcel Claramunt", email="marcel@moveread.com"}
 ]
-description = "Async, exception-free key-value store ABC. Implementations over SQLAlchemy, the filesystem, Azure Blob, and more."
+description = "Async, exception-free key-value store ABC. Implementations over SQLAlchemy, the filesystem, Redis, Azure Blob, and more."
 dependencies = [
   "haskellian", "pydantic", "lazy-loader"
 ]
@@ -21,8 +21,12 @@ repo = "https://github.com/marciclabas/kv.git"
 [project.optional-dependencies]
 fs = ["fs-tools"]
 sql = ["sqlmodel"]
+redis = ["redis"]
+azure = ["azure-storage-blob", "aiohttp"]
 server = ["fastapi", "uvicorn"]
 client = ["httpx"]
+cli = ["typer"]
+all = ["fs-tools", "sqlmodel", "redis", "azure-storage-blob", "aiohttp", "fastapi", "uvicorn", "httpx", "typer"]
 
 [project.scripts]
 kv = "kv.cli:app"

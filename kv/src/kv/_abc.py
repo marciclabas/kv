@@ -1,6 +1,8 @@
-from typing_extensions import TypeVar, Generic, AsyncIterable, Sequence, Awaitable, Literal, Any
+from typing_extensions import TypeVar, Generic, AsyncIterable, Literal, Any, TYPE_CHECKING
 from abc import ABC, abstractmethod
-from haskellian import Either, Left, Right, IsLeft, Promise, AsyncIter, \
+if TYPE_CHECKING:
+  from datetime import datetime
+from haskellian import Either, Promise, AsyncIter, \
   either as E, promise as P, asyn_iter as AI
 from dataclasses import dataclass
 
@@ -27,12 +29,13 @@ class InvalidData(StrMixin, BaseException):
 ReadError = DBError | InvalidData | InexistentItem
 
 T = TypeVar('T')
+U = TypeVar('U')
 
 class KV(ABC, Generic[T]):
   """Async, exception-free key-value store ABC"""
   
   @staticmethod
-  def of(conn_str: str, type: type[T] | None = None) -> 'KV[T]':
+  def of(conn_str: str, type: type[U] | None = None) -> 'KV[U]':
     """Create a KV from a connection string. Supports:
     - `file://<path>`: `FilesystemKV`
     - `sql+<protocol>://<conn_str>;Table=<table>`: `SQLKV`
@@ -40,6 +43,7 @@ class KV(ABC, Generic[T]):
     - `azure+blob+container://<conn_str>;Container=<container_name>`: `BlobContainerKV`
     - `https://<endpoint>` (or `http://<endpoint>`): `ClientKV`
     - `https://<endpoint>;Token=<token>` (or `http://<endpoint>;Token=<token>`): `ClientKV`
+    - `redis://...`, `rediss://...`, `redis+unix://...`: `RedisKV`
     """
     ...
     from .conn_strings import parse
@@ -105,3 +109,14 @@ class KV(ABC, Generic[T]):
     """Delete all entries"""
     async for key in self.keys().map(E.unsafe):
       (await self.delete(key)).unsafe()
+
+  def prefixed(self, prefix: str) -> 'KV[T]':
+    """Create a `KV` with all keys prefixed with `prefix`"""
+    from .prefix import PrefixedKV
+    return PrefixedKV(prefix, self)
+
+
+class LocatableKV(KV[T], Generic[T]):
+  @abstractmethod
+  def url(self, key: str, /, *, expiry: 'datetime | None' = None) -> str:
+    ...
