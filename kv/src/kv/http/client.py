@@ -1,8 +1,9 @@
+from datetime import datetime
 from typing_extensions import TypeVar, Generic, Any, Literal, AsyncIterable, Sequence
 from dataclasses import dataclass
-from pydantic import TypeAdapter, RootModel, ValidationError
-from haskellian import either as E, Either, Left, Right, promise as P, asyn_iter as AI
-from kv import KV, InvalidData, ReadError, DBError
+from pydantic import TypeAdapter, ValidationError
+from haskellian import Either, Left, Right, promise as P, asyn_iter as AI
+from kv import LocatableKV, ReadError, DBError
 from .req import Request, request as default_request
 from ..serialization import Parse, Dump, default, serializers
 
@@ -23,7 +24,7 @@ def validate_seq(raw_json: bytes):
     return [Left(DBError(e))]
 
 @dataclass
-class ClientKV(KV[T], Generic[T]):
+class ClientKV(LocatableKV[T], Generic[T]):
   """HTTP-based client `KV` implementation"""
   endpoint: str
   parse: Parse[T] = default[T].parse
@@ -73,3 +74,6 @@ class ClientKV(KV[T], Generic[T]):
     else:
       for key in keys.value:
         yield key
+
+  def url(self, key: str, /, *, expiry: datetime | None = None) -> str:
+    return f"{self.endpoint.rstrip('/')}/read?key={key}"

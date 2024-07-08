@@ -35,6 +35,6 @@ def serializers(type: type[T]) -> Serializers[T]:
       return Left(InvalidData(str(e)))
     
   def dump(value: T):
-    return Adapter.dump_json(value, exclude_none=True, exclude_defaults=True, by_alias=True)
+    return Adapter.dump_json(value, exclude_none=True)
   
   return Serializers(parse=parse, dump=dump)
