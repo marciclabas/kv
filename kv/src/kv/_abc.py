@@ -48,6 +48,9 @@ class KV(ABC, Generic[T]):
     - `sql+<protocol>://<conn_str>?table=<table>`: SQLKV (uses SQLAlchemy)
     - `azure+blob://<conn_str>`: BlobKV
     - `azure+blob://<conn_str>?container=<container_name>`: BlobContainerKV
+    - `azure+cosmos://<conn_str>?db=<db>`: CosmosKV
+    - `azure+cosmos://<conn_str>?db=<db>&container=<container>`: CosmosContainerKV
+    - `azure+cosmos://<conn_str>?db=<db>&container=<container>&partition=<partition>`: CosmosPartitionKV
     - `http://<endpoint>?token=<bearer>` or `https://<endpoint>?token=<bearer>`: ClientKV
     - `redis://<url>`, `rediss://<url>`, `redis+unix://<url>`: RedisKV
 

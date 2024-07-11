@@ -1,37 +1,18 @@
-from typing import TypeVar, Generic, Callable, Awaitable, ParamSpec
-from contextlib import asynccontextmanager
+from typing import TypeVar, Generic, Callable, Any
 from dataclasses import dataclass
-from azure.cosmos import PartitionKey
 from azure.cosmos.aio import CosmosClient
-from azure.core.exceptions import ResourceNotFoundError
-from haskellian import Either, Left, Right, promise as P, asyn_iter as AI
-from kv import DBError, InexistentItem, InvalidData, KV
+from azure.cosmos.exceptions import CosmosResourceNotFoundError
+from haskellian import Left, Right, asyn_iter as AI
+from kv import DBError, KV
+from .util import azure_safe, ContainerMixin, serializers, encode, decode
 
 T = TypeVar('T')
 U = TypeVar('U')
 L = TypeVar('L')
-Ps = ParamSpec('Ps')
-
-def azure_safe(coro: Callable[Ps, Awaitable[Either[L, T]]]):
-  @P.lift
-  async def wrapper(*args: Ps.args, **kwargs: Ps.kwargs) -> Either[L|DBError, T]:
-    try:
-      return await coro(*args, **kwargs)
-    except ResourceNotFoundError as e:
-      return Left(InexistentItem(detail=e)) # type: ignore
-    except Exception as e:
-      return Left(DBError(e))
-  return wrapper # type: ignore
 
 @dataclass
-class CosmosPartitionKV(KV[T], Generic[T]):
-  
-  client: Callable[[], CosmosClient]
-  db: str
-  container: str
+class CosmosPartitionKV(KV[T], ContainerMixin[T], Generic[T]):
   partition_key: str
-  parse: Callable[[dict|list|str], Either[InvalidData, T]]
-  dump: Callable[[T], dict|list|str]
 
   def __repr__(self):
     return f'''CosmosPartitionKV(
@@ -41,49 +22,43 @@ class CosmosPartitionKV(KV[T], Generic[T]):
 
   @staticmethod
   def new(
-    client: Callable[[], CosmosClient], type: type[U],
+    client: Callable[[], CosmosClient], type: type[U] | None = None,
     *, db: str, container: str, partition_key: str
   ) -> 'CosmosPartitionKV[U]':
-    from pydantic import TypeAdapter
-    Type = TypeAdapter(type)
-    def parse(x):
-      try:
-        return Right(Type.validate_python(x))
-      except Exception as e:
-        return Left(InvalidData(str(e)))
-    return CosmosPartitionKV(client, db, container, partition_key, parse, Type.dump_python)
+    return CosmosPartitionKV(
+      client, db=db, container=container, partition_key=partition_key,
+      **serializers(type or Any) # type: ignore
+    )
 
   @staticmethod
   def from_conn_str(
-    conn_str: str, type: type[U], *,
+    conn_str: str, type: type[U] | None = None, *,
     db: str, container: str, partition_key: str
   ) -> 'CosmosPartitionKV[U]':
     client = lambda: CosmosClient.from_connection_string(conn_str)
     return CosmosPartitionKV.new(client, type, db=db, container=container, partition_key=partition_key)
 
-  @asynccontextmanager
-  async def container_manager(self):
-    async with self.client() as client:
-      db = await client.create_database_if_not_exists(self.db)
-      yield await db.create_container_if_not_exists(id=self.container, partition_key=PartitionKey(path='/partition'))
-
   @azure_safe
   async def insert(self, key: str, value: T):
     async with self.container_manager() as cc:
-      item = {'id': key, 'partition': self.partition_key, 'value': self.dump(value) }
-      await cc.upsert_item(item)
+      item = {'id': encode(key), 'partition': self.partition_key, 'value': self.dump(value) }
+      try:
+        await cc.upsert_item(item)
+      except CosmosResourceNotFoundError:
+        await self.create()
+        await cc.upsert_item(item)
       return Right(None)
 
   @azure_safe
   async def read(self, key: str):
     async with self.container_manager() as cc:
-      item = await cc.read_item(item=key, partition_key=key)
+      item = await cc.read_item(item=key, partition_key=self.partition_key)
       return self.parse(item['value'])
 
   @azure_safe
   async def delete(self, key: str):
     async with self.container_manager() as cc:
-      await cc.delete_item(item=key, partition_key=key)
+      await cc.delete_item(item=encode(key), partition_key=self.partition_key)
       return Right(None)
     
   @azure_safe
@@ -101,7 +76,9 @@ class CosmosPartitionKV(KV[T], Generic[T]):
       async with self.container_manager() as cc:
         query = 'SELECT c.id FROM c'
         async for item in cc.query_items(query=query, partition_key=self.partition_key):
-          yield Right(item['id'])
+          yield Right(decode(item['id']))
+    except CosmosResourceNotFoundError:
+      ...
     except Exception as e:
       yield Left(DBError(e))
 
@@ -112,12 +89,17 @@ class CosmosPartitionKV(KV[T], Generic[T]):
         query = 'SELECT c.id, c["value"] FROM c'
         async for item in cc.query_items(query=query, partition_key=self.partition_key):
           e = self.parse(item['value'])
-          yield e.fmap(lambda v: (item['id'], v))
+          yield e.fmap(lambda v: (decode(item['id']), v))
+    except CosmosResourceNotFoundError:
+      ...
     except Exception as e:
       yield Left(DBError(e))
 
   @azure_safe
   async def clear(self):
-    async with self.container_manager() as cc:
-      await cc.delete_all_items_by_partition_key(self.partition_key)
+    try:
+      async with self.container_manager() as cc:
+        await cc.delete_all_items_by_partition_key(self.partition_key)
+    except CosmosResourceNotFoundError:
+      ...
     return Right(None)

@@ -1,6 +1,6 @@
 from typing_extensions import TypeVar, overload
 from urllib.parse import urlparse, parse_qs, unquote
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 from kv import KV
 
 T = TypeVar('T')
@@ -33,6 +33,11 @@ class HTTPParams(Params):
 
 class AzureBlobParams(Params):
   container: str | None = None
+
+class CosmosParams(Params):
+  db: str
+  container: str | None = None
+  partition: str | None = None
 
 class SQLParams(Params):
   table: str
@@ -68,6 +73,16 @@ def parse(conn_str: str, type: type[T] | None = None): # type: ignore
       kv = BlobContainerKV.from_conn_str(endpoint, params.container, type)
     else:
       kv = BlobKV.from_conn_str(endpoint, type)
+
+  elif scheme == 'azure+cosmos':
+    params = CosmosParams(**query)
+    from kv.azure import CosmosKV, CosmosContainerKV, CosmosPartitionKV
+    if params.container and params.partition:
+      kv = CosmosPartitionKV.from_conn_str(endpoint, type, db=params.db, container=params.container, partition_key=params.partition)
+    elif params.container:
+      kv = CosmosContainerKV.from_conn_str(endpoint, type, db=params.db, container=params.container)
+    else:
+      kv = CosmosKV.from_conn_str(endpoint, type, db=params.db)
 
   elif scheme == 'sqlite':
     params = SQLParams(**query)

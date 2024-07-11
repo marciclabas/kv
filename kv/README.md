@@ -49,8 +49,6 @@ kv copy -i 'file://data' -o 'sql+sqlite:///path/to/db.sqlite' -v
 kv copy -i 'https://my.com/data' -o 'sql+sqlite:///path/to/db.sqlite'
 ```
 
-```bash
-```
 
 ```bash
 kv test CONN_STR # runs some basic tests
