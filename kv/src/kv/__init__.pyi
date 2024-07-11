@@ -5,13 +5,17 @@ from .impl.fs import FilesystemKV
 from .impl.sqlite import SQLiteKV
 from .impl.sql import SQLKV
 from .impl.redis import RedisKV
-from .impl import azure
 from .http import ClientKV, ServerKV
+from .azure import BlobKV, BlobContainerKV, CosmosPartitionKV
+from .conn_strings import parse_type
 from .tests import test
+from .import azure, http
 
 __all__ = [
   'KV', 'LocatableKV',
   'ReadError', 'InvalidData', 'InexistentItem', 'DBError',
   'DictKV', 'FilesystemKV', 'SQLiteKV', 'SQLKV', 'ClientKV', 'ServerKV', 'RedisKV',
-  'Parse', 'Dump', 'serializers', 'Serializers', 'test', 'azure'
+  'BlobKV', 'BlobContainerKV', 'CosmosPartitionKV',
+  'parse_type', 'test',
+  'Parse', 'Dump', 'serializers', 'Serializers', 'test', 'azure', 'http',
 ]

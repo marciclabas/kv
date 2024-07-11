@@ -10,6 +10,7 @@ from kv.serialization import Parse, Dump, default, serializers
 from .util import blob_url
 
 T = TypeVar('T')
+U = TypeVar('U')
 L = TypeVar('L')
 Ps = ParamSpec('Ps')
 
@@ -33,17 +34,20 @@ class BlobContainerKV(LocatableKV[T], Generic[T]):
   parse: Parse[T] = default[T].parse
   dump: Dump[T] = default[T].dump
 
-  @staticmethod
-  def validated(Type: type[T], client: Callable[[], BlobServiceClient], *, container: str) -> 'BlobContainerKV[T]':
-    return BlobContainerKV(client, container, **serializers(Type))
+  def __repr__(self):
+    return f'BlobContainerKV(account={self.client().account_name}, container={self.container})'
 
   @staticmethod
-  def from_conn_str(conn_str: str, container: str, Type: type[T] | None = None) -> 'BlobContainerKV[T]':
+  def new(client: Callable[[], BlobServiceClient], type: type[U] | None = None, *, container: str) -> 'BlobContainerKV[U]':
+    return (
+      BlobContainerKV(client, container, **serializers(type))
+      if type else BlobContainerKV(client, container)
+    )
+
+  @staticmethod
+  def from_conn_str(conn_str: str, container: str, type: type[U] | None = None) -> 'BlobContainerKV[U]':
     client = lambda: BlobServiceClient.from_connection_string(conn_str)
-    if Type:
-      return BlobContainerKV.validated(Type, client, container=container)
-    else:
-      return BlobContainerKV(client, container)
+    return BlobContainerKV.new(client, type, container=container)
 
   @asynccontextmanager
   async def container_manager(self):

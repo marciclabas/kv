@@ -21,17 +21,20 @@ class SQLiteKV(KV[T], Generic[T]):
   dtype: str = 'TEXT'
   batch_size: int = 256
 
+  def __repr__(self):
+    return f'SQLiteKV(db_path={self.db_path!r}, table={self.table!r}, dtype={self.dtype!r})'
+
   @staticmethod
-  def at(db_path: str, Type: type[T], *, table: str = 'kv') -> 'SQLiteKV[T]':
+  def at(db_path: str, type: type[T], *, table: str = 'kv') -> 'SQLiteKV[T]':
     dir = os.path.dirname(db_path)
     if dir != '':
       os.makedirs(dir, exist_ok=True)
-    if Type is bytes:
+    if type is bytes:
       return SQLiteKV(sqlite3.connect(db_path), db_path, table, dtype='BLOB', **default[T].serializers)
-    elif Type is str:
+    elif type is str:
       return SQLiteKV(sqlite3.connect(db_path), db_path, table, dtype='TEXT', **default[T].serializers)
     else:
-      return SQLiteKV(sqlite3.connect(db_path), db_path, table, dtype='JSON', **serializers(Type))
+      return SQLiteKV(sqlite3.connect(db_path), db_path, table, dtype='JSON', **serializers(type))
 
   def __post_init__(self):
     self.conn.execute(*queries.create(self.table, self.dtype))

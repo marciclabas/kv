@@ -27,3 +27,6 @@ class PrefixedKV(KV[T], Generic[T]):
     async for e in self.kv.keys():
       if e.tag == 'right' and e.value.startswith(self.prefix):
         yield Right(e.value.removeprefix(self.prefix))
+
+  def url(self, key: str, /, *, expiry=None):
+    return self.kv.url(self.prefix + key, expiry=expiry) # type: ignore

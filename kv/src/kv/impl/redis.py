@@ -27,6 +27,9 @@ class RedisKV(KV[T], Generic[T]):
   parse: Parse[T] = default[T].parse
   dump: Dump[T] = default[T].dump
 
+  def __repr__(self):
+    return f'RedisKV({self.client!r})'
+
   @staticmethod
   @overload
   def from_url(url: str, *, parse: Parse[T] = default[T].parse, dump: Dump[T] = default[T].dump) -> 'RedisKV[T]':

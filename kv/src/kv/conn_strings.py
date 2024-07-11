@@ -1,91 +1,98 @@
-from typing import NamedTuple, TypeVar
+from typing_extensions import TypeVar, overload
+from urllib.parse import urlparse, parse_qs, unquote
+from pydantic import BaseModel, ConfigDict
 from kv import KV
-from kv.http import req
 
 T = TypeVar('T')
 
-class ParsedSQL(NamedTuple):
-  conn_str: str
+def parse_type(type: str):
+  if type == 'dict':
+    return dict
+  if type == 'list':
+    return list
+  if type == 'set':
+    return set
+  if type == 'str':
+    return str
+  if type == 'int':
+    return int
+  if type == 'float':
+    return float
+  if type == 'bool':
+    return bool
+  if type == 'bytes':
+    return None
+  raise ValueError(f'Invalid type: {type}')
+
+class Params(BaseModel):
+  prefix: str | None = None
+  type: str | None = None
+
+class HTTPParams(Params):
+  token: str | None = None
+
+class AzureBlobParams(Params):
+  container: str | None = None
+
+class SQLParams(Params):
   table: str
 
-def parse_sql(conn_str: str) -> ParsedSQL | None:
-  import re
-  sql_regex = re.compile(r'^sql\+.+://')
-  match = sql_regex.match(conn_str)
-  if match:
-    pattern = re.compile(r"^sql\+")
-    sql_str = pattern.sub("", conn_str)
-    proto, url = sql_str.split("://")
-    parts = url.rsplit(';', maxsplit=1)
-    if len(parts) != 2 or not parts[1].lower().startswith("table="):
-      raise ValueError(f"Missing table in connection string: '{conn_str[:16]}...'. Expected 'sql+<sql protocol>://<URL>;Table=<table>'")
-    table = parts[1].split('=')[1]
-    return ParsedSQL(conn_str=f'{proto}://{parts[0]}', table=table)
-  
+@overload
+def parse(conn_str: str) -> KV[bytes]:
+  ...
+@overload
 def parse(conn_str: str, type: type[T] | None = None) -> KV[T]:
-    """Create a KV from a connection string. Supports:
-    - `file://<path>`: `FilesystemKV`
-    - `sqlite://<path>`: `SQLiteKV` (uses `sqlite3`)
-    - `sql+<protocol>://<conn_str>;Table=<table>`: `SQLKV` (uses `sqlalchemy`)
-    - `azure+blob://<conn_str>`: `BlobKV`
-    - `azure+blob+container://<conn_str>;Container=<container_name>`: `BlobContainerKV`
-    - `https://<endpoint>` (or `http://<endpoint>`): `ClientKV`
-    - `https://<endpoint>;Token=<bearer>` (or `http://<endpoint>;Token=<bearer>`): `ClientKV`
-    - `redis://...`, `rediss://...`, `redis+unix://...`: `RedisKV`
-    """
-    if conn_str.startswith('file://'):
-        from kv import FilesystemKV
-        _, path = conn_str.split('://', maxsplit=1)
-        return FilesystemKV(path) if type is None else FilesystemKV.validated(type, path)
-    
-    if conn_str.startswith('redis'):
-      if conn_str.startswith('redis+unix://'):
-        conn_str = conn_str.removeprefix('redis+')
-      from kv import RedisKV
-      return RedisKV.from_url(conn_str, type)
+  ...
+def parse(conn_str: str, type: type[T] | None = None): # type: ignore
+  parsed_url = urlparse(conn_str) # 'file://path/to/base?prefix=hello'
+  scheme = parsed_url.scheme # 'file'
+  netloc = parsed_url.netloc # 'path'
+  path = unquote(parsed_url.path) # '/to/base'
+  endpoint = netloc + path # 'path/to/base'
+  query = parse_qs(parsed_url.query) # { 'prefix': ['hello'] }
+  query = { k: v[0] for k, v in query.items() }
 
-    if conn_str.startswith("azure+blob://"):
-        from kv.impl.azure import BlobKV
-        _, conn_str = conn_str.split('://', maxsplit=1)
-        return BlobKV.from_conn_str(conn_str, type)
-    
-    if conn_str.startswith("azure+blob+container://"):
-        parts = conn_str.split('://')[1].rsplit(';', maxsplit=1)
-        if len(parts) != 2 or not parts[1].lower().startswith("container="):
-          raise ValueError("Invalid connection string. Expected 'azure+blob+container://<conn_str>;Container=<container_name>'")
-        from kv.impl.azure import BlobContainerKV
-        blob_conn_str = parts[0]
-        container = parts[1].split('=')[1]
-        return BlobContainerKV.from_conn_str(blob_conn_str, container, type)
-    
-    if conn_str.startswith("http://") or conn_str.startswith("https://"):
-        from kv.http import ClientKV, bound_request, request
-        if len(parts := conn_str.split(';')) == 2:
-          conn_str = parts[0]
-          token = parts[1].split('=')[1]
-          req = bound_request(headers={'Authorization': f'Bearer {token}'})
-        else:
-          req = request
-        if type:
-          return ClientKV.validated(type, conn_str, request=req)
-        else:
-          return ClientKV(conn_str, request=req)
-        
-    if conn_str.startswith('sqlite://'):
-      from kv.impl.sqlite import SQLiteKV
-      _, rest = conn_str.split('://', maxsplit=1)
-      if len(parts := rest.split(';')) == 2:
-        path = parts[0]
-        table = parts[1].split('=')[1]
-        return SQLiteKV.at(path, type or bytes, table=table)
-      else:
-        path = parts[0]
-        return SQLiteKV.at(path, type or bytes)
+  params = Params(**query)
+  type = type or params.type and parse_type(params.type) # type: ignore
 
-    if (parsed_sql := parse_sql(conn_str)) is not None:
-        from sqlalchemy import create_engine
-        from kv import SQLKV
-        engine = lambda: create_engine(parsed_sql.conn_str)
-        return SQLKV(type or bytes, engine, table=parsed_sql.table) # type: ignore
-    
-    raise ValueError(f"Invalid connection string: '{conn_str[:8]}...'. Expected 'file://<path>', 'sql+<protocol>://<conn_str>;Table=<table>', 'azure+blob://<conn_str>', or 'azure+blob+container://<conn_str>;Container=<container_name>'")
+  if scheme in ('http', 'https'):
+    params = HTTPParams(**query)
+    from kv.http import ClientKV
+    url = f'{scheme}://{endpoint}'
+    kv = ClientKV.new(url, type, token=params.token)
+
+  elif scheme == 'azure+blob':
+    params = AzureBlobParams(**query)
+    from kv.azure import BlobKV, BlobContainerKV
+    if params.container:
+      kv = BlobContainerKV.from_conn_str(endpoint, params.container, type)
+    else:
+      kv = BlobKV.from_conn_str(endpoint, type)
+
+  elif scheme == 'sqlite':
+    params = SQLParams(**query)
+    from kv import SQLiteKV
+    kv = SQLiteKV.at(endpoint, type, table=params.table)
+
+  elif scheme.startswith('sql+'):
+    params = SQLParams(**query)
+    from kv import SQLKV
+    proto = scheme.removeprefix('sql+')
+    url = f'{proto}://{endpoint}'
+    kv = SQLKV.new(url, type, table=params.table)
+
+  elif scheme == 'file':
+    from kv import FilesystemKV
+    kv = FilesystemKV.new(endpoint, type)
+
+  elif scheme.startswith('redis'):
+    if scheme.startswith('redis+'):
+      scheme = scheme.removeprefix('redis+')
+    url = f'{scheme}://{endpoint}'
+    from kv import RedisKV
+    kv = RedisKV.from_url(url, type)
+
+  else:
+    raise ValueError(f'Unknown scheme: {scheme}')
+  
+  return kv.prefixed(params.prefix) if params.prefix else kv

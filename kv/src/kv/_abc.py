@@ -1,4 +1,4 @@
-from typing_extensions import TypeVar, Generic, AsyncIterable, Literal, Any, TYPE_CHECKING
+from typing_extensions import TypeVar, Generic, AsyncIterable, Literal, Any, TYPE_CHECKING, Self
 from abc import ABC, abstractmethod
 if TYPE_CHECKING:
   from datetime import datetime
@@ -36,16 +36,26 @@ class KV(ABC, Generic[T]):
   
   @staticmethod
   def of(conn_str: str, type: type[U] | None = None) -> 'KV[U]':
-    """Create a KV from a connection string. Supports:
-    - `file://<path>`: `FilesystemKV`
-    - `sql+<protocol>://<conn_str>;Table=<table>`: `SQLKV`
-    - `azure+blob://<conn_str>`: `BlobKV`
-    - `azure+blob+container://<conn_str>;Container=<container_name>`: `BlobContainerKV`
-    - `https://<endpoint>` (or `http://<endpoint>`): `ClientKV`
-    - `https://<endpoint>;Token=<token>` (or `http://<endpoint>;Token=<token>`): `ClientKV`
-    - `redis://...`, `rediss://...`, `redis+unix://...`: `RedisKV`
     """
-    ...
+    Create a KV (Key-Value) store instance from a connection string.
+
+    The function supports various schemes to connect to different types of key-value stores, 
+    and allows for additional parameters to be specified via the query string.
+
+    Supported schemes:
+    - `file://<path>`: FilesystemKV
+    - `sqlite://<path>?table=<table>`: SQLiteKV (uses sqlite3)
+    - `sql+<protocol>://<conn_str>?table=<table>`: SQLKV (uses SQLAlchemy)
+    - `azure+blob://<conn_str>`: BlobKV
+    - `azure+blob://<conn_str>?container=<container_name>`: BlobContainerKV
+    - `http://<endpoint>?token=<bearer>` or `https://<endpoint>?token=<bearer>`: ClientKV
+    - `redis://<url>`, `rediss://<url>`, `redis+unix://<url>`: RedisKV
+
+    Examples:
+    >>> kv = KV.of('file://path/to/base?prefix=hello/')
+    >>> kv = KV.of('sqlite://path/to/db.sqlite?table=mytable')
+    >>> kv = KV.of('http://example.com?token=secret&prefix=hello-')
+    """
     from .conn_strings import parse
     return parse(conn_str, type)
   
@@ -110,13 +120,75 @@ class KV(ABC, Generic[T]):
     async for key in self.keys().map(E.unsafe):
       (await self.delete(key)).unsafe()
 
-  def prefixed(self, prefix: str) -> 'KV[T]':
+  def prefixed(self, prefix: str, /) -> 'Self':
     """Create a `KV` with all keys prefixed with `prefix`"""
     from .prefix import PrefixedKV
-    return PrefixedKV(prefix, self)
+    return PrefixedKV(prefix, self) # type: ignore
 
+  def served(self, base_url: str) -> 'LocatableKV[T]':
+    """Create a `LocatableKV` assuming `self` is being served at `base_url`
+    
+    Example:
+    ```
+    import uvicorn
+    from kv import KV, ServerKV
+    
+    host = ...
+    port = ...
+    kv = KV.of('file://data').served(f'http://{host}:{port}')
+    kv.url('hello') # f'http://{host}:{port}/read?key=hello'
+    api = ServerKV(kv)
+    uvicorn.run(api, host=host, port=port)
+    ```
+    """
+    return Served(base_url, self)
 
 class LocatableKV(KV[T], Generic[T]):
   @abstractmethod
   def url(self, key: str, /, *, expiry: 'datetime | None' = None) -> str:
     ...
+
+
+@dataclass
+class Served(LocatableKV[T], Generic[T]):
+  base_url: str
+  kv: KV[T]
+  prefix: str = ''
+
+  def url(self, key: str, /, *, expiry: 'datetime | None' = None) -> str:
+    from urllib.parse import quote
+    return f"{self.base_url.rstrip('/')}/read?key={quote(key)}&prefix={quote(self.prefix)}"
+  
+  def prefixed(self, prefix: str):
+    return Served(self.base_url, self.kv, self.prefix + prefix) # type: ignore
+  
+  def insert(self, key, value):
+    return self.kv.prefixed(self.prefix).insert(key, value)
+  
+  def read(self, key):
+    return self.kv.prefixed(self.prefix).read(key)
+  
+  def delete(self, key):
+    return self.kv.prefixed(self.prefix).delete(key)
+  
+  def keys(self):
+    return self.kv.prefixed(self.prefix).keys()
+  
+  def items(self):
+    return self.kv.prefixed(self.prefix).items()
+  
+  def values(self):
+    return self.kv.prefixed(self.prefix).values()
+  
+  def has(self, key):
+    return self.kv.prefixed(self.prefix).has(key)
+  
+  def copy(self, key, to, to_key):
+    return self.kv.prefixed(self.prefix).copy(key, to, to_key)
+  
+  def move(self, key, to, to_key):
+    return self.kv.prefixed(self.prefix).move(key, to, to_key)
+  
+  def clear(self):
+    return self.kv.prefixed(self.prefix).clear()
+  

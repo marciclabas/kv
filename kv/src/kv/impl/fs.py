@@ -1,4 +1,4 @@
-from typing_extensions import TypeVar, Generic, ParamSpec
+from typing_extensions import TypeVar, Generic, ParamSpec, overload
 from dataclasses import dataclass
 import os
 from haskellian import Left, Right, promise as P, asyn_iter as AI
@@ -7,6 +7,7 @@ from kv import KV, DBError, InexistentItem
 from kv.serialization import Parse, Dump, default, serializers
 
 T = TypeVar('T')
+U = TypeVar('U')
 L = TypeVar('L')
 Ps = ParamSpec('Ps')
 
@@ -27,14 +28,25 @@ class FilesystemKV(KV[T], Generic[T]):
   dump: Dump[T] = default[T].dump
 
   @classmethod
-  def validated(cls, Type: type[T], base_path: str) -> 'FilesystemKV[T]':
-    return FilesystemKV(base_path=base_path, extension='.json', **serializers(Type))
+  @overload
+  def new(cls, base_path: str) -> 'FilesystemKV[bytes]':
+    ...
+  @classmethod
+  @overload
+  def new(cls, base_path: str, type: type[U] | None = None) -> 'FilesystemKV[U]':
+    ...
+  @classmethod
+  def new(cls, base_path: str, type: type[T] | None = None):
+    if type:
+      return FilesystemKV(base_path, extension='.json', **serializers(type))
+    else:
+      return FilesystemKV(base_path)
 
   def __post_init__(self):
     os.makedirs(self.base_path, exist_ok=True)
 
   def __repr__(self):
-    return f'FilesystemKV({self.base_path!r}, extension={self.extension!r})'
+    return f'FilesystemKV(base_path={self.base_path!r}, extension={self.extension!r})'
   
   def path(self, key: str):
     return os.path.join(self.base_path, key + self.extension)
@@ -84,3 +96,9 @@ class FilesystemKV(KV[T], Generic[T]):
       return Right(None)
     except OSError as e:
       return Left(DBError(str(e)))
+    
+  def prefixed(self, prefix: str) -> KV[T]:
+    if prefix.endswith('/'):
+      new_base = os.path.join(self.base_path, prefix)
+      return FilesystemKV(new_base, self.extension, self.parse, self.dump)
+    return super().prefixed(prefix)

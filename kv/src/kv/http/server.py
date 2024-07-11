@@ -22,13 +22,16 @@ def _api(
       if req.headers.get('Authorization') != f'Bearer {token}':
         return Response(status_code=st.HTTP_401_UNAUTHORIZED)
       return await call_next(req)
+    
+  def _kv(prefix: str):
+    return prefix and kv.prefixed(prefix) or kv
 
   @app.post('/insert')
-  async def insert(key: str, req: Request, res: Response) -> Either[DBError|InvalidData, None]:
+  async def insert(key: str, prefix: str, *, req: Request, res: Response) -> Either[DBError|InvalidData, None]:
     body = await req.body()
     match parse(body):
       case Right(val):
-        if (r := await kv.insert(key, val)).tag == 'left':
+        if (r := await _kv(prefix).insert(key, val)).tag == 'left':
           res.status_code = 500
         return r
       case Left(e):
@@ -36,8 +39,8 @@ def _api(
         return Left(e)
 
   @app.get('/read')
-  async def read(key: str):
-    e = await kv.read(key)
+  async def read(key: str, prefix: str):
+    e = await _kv(prefix).read(key)
     if e.tag == 'right':
       return Response(content=dump(e.value))
     else:
@@ -46,26 +49,26 @@ def _api(
       return Response(content, status_code=status)
   
   @app.get('/has')
-  async def has(key: str, res: Response) -> Either[DBError, bool]:
-    r = await kv.has(key)
+  async def has(key: str, prefix: str, res: Response) -> Either[DBError, bool]:
+    r = await _kv(prefix).has(key)
     if r.tag == 'left':
       res.status_code = 500
     return r
   
   @app.get('/keys')
-  async def keys():
-    return await kv.keys().map(lambda e: e.mapl(DBError)).sync()
+  async def keys(prefix: str):
+    return await _kv(prefix).keys().map(lambda e: e.mapl(DBError)).sync()
   
   @app.delete('/delete')
-  async def delete(key: str, res: Response):
-    e = await kv.delete(key)
+  async def delete(key: str, prefix: str, res: Response):
+    e = await _kv(prefix).delete(key)
     if e.tag == 'left':
       res.status_code = 500
   
 
   @app.delete('/clear')
-  async def clear(res: Response):
-    e = await kv.clear()
+  async def clear(prefix: str, res: Response):
+    e = await _kv(prefix).clear()
     if e.tag == 'left':
       res.status_code = 500
   

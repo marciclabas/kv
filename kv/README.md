@@ -40,7 +40,16 @@ await kv.insert('key', MySerializableType(1, '2')) # Left[InvalidData] | Right[N
 ## CLI
   
 ```bash
-kv serve CONN_STR --token "shhhhh" --port 8080 --type dict
+kv serve 'file://data' --token "shhhhh" --port 8080 --type dict
+kv serve 'sql+postgresql+psycop2g://...' --port 8081 --type str
+```
+
+```bash
+kv copy -i 'file://data' -o 'sql+sqlite:///path/to/db.sqlite' -v
+kv copy -i 'https://my.com/data' -o 'sql+sqlite:///path/to/db.sqlite'
+```
+
+```bash
 ```
 
 ```bash

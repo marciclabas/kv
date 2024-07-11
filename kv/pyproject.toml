@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "python-kv"
-version = "0.1.6"
+version = "0.2.4"
 authors = [
   {name="Marcel Claramunt", email="marcel@moveread.com"}
 ]
@@ -20,9 +20,10 @@ repo = "https://github.com/marciclabas/kv.git"
 
 [project.optional-dependencies]
 fs = ["fs-tools"]
-sql = ["sqlmodel"]
+sql = ["sqlmodel", "sqltypes"]
 redis = ["redis"]
-azure = ["azure-storage-blob", "aiohttp"]
+blob = ["azure-storage-blob", "aiohttp"]
+cosmos = ["azure-cosmos", "aiohttp"]
 server = ["fastapi", "uvicorn"]
 client = ["httpx"]
 cli = ["typer"]

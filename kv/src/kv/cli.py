@@ -39,25 +39,6 @@ def test(conn_str: str, verbose: bool = typer.Option(False, '-v', '--verbose')):
   if E.sequence(results).tag == 'left':
     raise typer.Exit(1)
 
-def parse_type(type: str):
-  if type == 'dict':
-    return dict
-  if type == 'list':
-    return list
-  if type == 'set':
-    return set
-  if type == 'str':
-    return str
-  if type == 'int':
-    return int
-  if type == 'float':
-    return float
-  if type == 'bool':
-    return bool
-  if type == 'bytes':
-    return None
-  raise ValueError(f'Invalid type: {type}')
-
 @app.command()
 def serve(
   conn_str: str = typer.Argument(..., help='KV connection string'),
@@ -66,7 +47,7 @@ def serve(
   port: int = typer.Option(8000, '-p', '--port'),
   type: str = typer.Option('bytes', '--type', help='Datatype. Supports: dict, list, set, str, int, float, bool, bytes (default)'),
 ):
-  from kv import http, KV
+  from kv import http, KV, parse_type
   import uvicorn
 
   t = parse_type(type)
@@ -75,3 +56,31 @@ def serve(
   app = http.ServerKV(kv, type=t, token=token or None)
 
   uvicorn.run(app, host=host, port=port)
+
+@app.command()
+def copy(
+  input: str = typer.Option(..., '-i', '--input', help='Input KV connection string'),
+  output: str = typer.Option(..., '-o', '--output', help='Output KV connection string'),
+  verbose: bool = typer.Option(False, '-v', '--verbose'),
+  type: str = typer.Option('bytes', '--type', help='Datatype. Supports: dict, list, set, str, int, float, bool, bytes (default)'),
+):
+  from kv import KV, parse_type
+  t = parse_type(type)
+  import asyncio
+
+  async def copy():
+    inp = KV.of(input, t)
+    out = KV.of(output, t)
+    if verbose:
+      print('Fetching keys...')
+    keys = await inp.keys().map(E.unsafe).sync()
+    if verbose:
+      print(f'Copying {len(keys)} items...')
+    for i, key in enumerate(keys):
+      if verbose:
+        print(f'\r[{i+1}/{len(keys)}]: {key}', end='', flush=True)
+      (await inp.copy(key, out, key)).unsafe()
+    if verbose:
+      print()
+
+  asyncio.run(copy())
