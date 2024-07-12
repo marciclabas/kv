@@ -124,9 +124,20 @@ class KV(ABC, Generic[T]):
       (await self.delete(key)).unsafe()
 
   def prefixed(self, prefix: str, /) -> 'Self':
-    """Create a `KV` with all keys prefixed with `prefix`"""
+    """Create a `KV` with all keys prefixed with `prefix`, without nesting."""
     from .prefix import PrefixedKV
-    return PrefixedKV(prefix, self) # type: ignore
+    return PrefixedKV(prefix.rstrip('/') + '/', self) # type: ignore
+  
+  def prefix(self, prefix: str, /) -> 'Self':
+    """Nested prefix. Supports slashes in `prefix`.
+    >>> kv.prefix('a/b')
+    is equivalent to
+    >>> kv.prefixed('a').prefixed('b')
+    """
+    kv = self
+    for p in prefix.strip('/').split('/'):
+      kv = kv.prefixed(p)
+    return kv
 
   def served(self, base_url: str) -> 'LocatableKV[T]':
     """Create a `LocatableKV` assuming `self` is being served at `base_url`
@@ -156,42 +167,42 @@ class LocatableKV(KV[T], Generic[T]):
 class Served(LocatableKV[T], Generic[T]):
   base_url: str
   kv: KV[T]
-  prefix: str = ''
+  prefix_: str = ''
 
   def url(self, key: str, /, *, expiry: 'datetime | None' = None) -> str:
     from urllib.parse import quote
-    return f"{self.base_url.rstrip('/')}/read?key={quote(key)}&prefix={quote(self.prefix)}"
+    return f"{self.base_url.rstrip('/')}/read?key={quote(key)}&prefix={quote(self.prefix_)}"
   
   def prefixed(self, prefix: str):
-    return Served(self.base_url, self.kv, self.prefix + prefix) # type: ignore
+    return Served(self.base_url, self.kv, self.prefix_ + '/' + prefix) # type: ignore
   
   def insert(self, key, value):
-    return self.kv.prefixed(self.prefix).insert(key, value)
+    return self.kv.prefix(self.prefix_).insert(key, value)
   
   def read(self, key):
-    return self.kv.prefixed(self.prefix).read(key)
+    return self.kv.prefix(self.prefix_).read(key)
   
   def delete(self, key):
-    return self.kv.prefixed(self.prefix).delete(key)
+    return self.kv.prefix(self.prefix_).delete(key)
   
   def keys(self):
-    return self.kv.prefixed(self.prefix).keys()
+    return self.kv.prefix(self.prefix_).keys()
   
   def items(self):
-    return self.kv.prefixed(self.prefix).items()
+    return self.kv.prefix(self.prefix_).items()
   
   def values(self):
-    return self.kv.prefixed(self.prefix).values()
+    return self.kv.prefix(self.prefix_).values()
   
   def has(self, key):
-    return self.kv.prefixed(self.prefix).has(key)
+    return self.kv.prefix(self.prefix_).has(key)
   
   def copy(self, key, to, to_key):
-    return self.kv.prefixed(self.prefix).copy(key, to, to_key)
+    return self.kv.prefix(self.prefix_).copy(key, to, to_key)
   
   def move(self, key, to, to_key):
-    return self.kv.prefixed(self.prefix).move(key, to, to_key)
+    return self.kv.prefix(self.prefix_).move(key, to, to_key)
   
   def clear(self):
-    return self.kv.prefixed(self.prefix).clear()
+    return self.kv.prefix(self.prefix_).clear()
   

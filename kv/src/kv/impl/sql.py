@@ -1,4 +1,4 @@
-from typing_extensions import AsyncIterable, TypeVar, Generic, Callable, overload
+from typing_extensions import AsyncIterable, TypeVar, Generic, Any, overload
 from pydantic import RootModel
 from haskellian import Either, Left, Right, promise as P, asyn_iter as AI
 from sqlalchemy import Engine
@@ -37,6 +37,7 @@ class SQLKV(KV[T], Generic[T]):
         value: Mapped[str] = mapped_column(type_=String)
       
     else:
+      Type = Type or Any
       Root = RootModel[Type]
       self.dump = lambda x: Root(x)
       self.parse = lambda x: x.root

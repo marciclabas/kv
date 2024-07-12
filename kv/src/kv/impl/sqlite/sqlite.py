@@ -1,4 +1,4 @@
-from typing_extensions import TypeVar, Generic
+from typing_extensions import TypeVar, Generic, Any
 from dataclasses import dataclass
 from haskellian import Left, Right, Either, either as E, promise as P, asyn_iter as AI
 from kv import KV, InexistentItem, DBError
@@ -34,7 +34,7 @@ class SQLiteKV(KV[T], Generic[T]):
     elif type is str:
       return SQLiteKV(sqlite3.connect(db_path), db_path, table, dtype='TEXT', **default[T].serializers)
     else:
-      return SQLiteKV(sqlite3.connect(db_path), db_path, table, dtype='JSON', **serializers(type))
+      return SQLiteKV(sqlite3.connect(db_path), db_path, table, dtype='JSON', **serializers(type or Any))
 
   def __post_init__(self):
     self.conn.execute(*queries.create(self.table, self.dtype))

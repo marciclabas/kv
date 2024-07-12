@@ -62,13 +62,16 @@ class CosmosContainerKV(KV[T], ContainerMixin[T], Generic[T]):
     partition, item = self.split_key(key)
     return self.prefixed(partition).delete(item)
   
+  def key(self, item: dict):
+    return self.merge_key(item['partition'], decode(item['id']))
+  
   @AI.lift
   async def keys(self):
     try:
       async with self.container_manager() as cc:
-        query = 'SELECT c.id FROM c'
+        query = 'SELECT c.id, c.partition FROM c'
         async for item in cc.query_items(query=query):
-          yield Right(decode(item['id']))
+          yield Right(self.key(item))
     except CosmosResourceNotFoundError:
       ...
     except Exception as e:
@@ -78,10 +81,10 @@ class CosmosContainerKV(KV[T], ContainerMixin[T], Generic[T]):
   async def items(self):
     try:
       async with self.container_manager() as cc:
-        query = 'SELECT c.id, c["value"] FROM c'
+        query = 'SELECT c.id, c.partition, c["value"] FROM c'
         async for item in cc.query_items(query=query):
           e = self.parse(item['value'])
-          yield e.fmap(lambda v: (decode(item['id']), v))
+          yield e.fmap(lambda v: (self.key(item), v))
     except CosmosResourceNotFoundError:
       ...
     except Exception as e:

@@ -98,7 +98,5 @@ class FilesystemKV(KV[T], Generic[T]):
       return Left(DBError(str(e)))
     
   def prefixed(self, prefix: str) -> 'FilesystemKV[T]':
-    if prefix.endswith('/'):
-      new_base = os.path.join(self.base_path, prefix)
-      return FilesystemKV(new_base, self.extension, self.parse, self.dump)
-    return super().prefixed(prefix)
+    new_base = os.path.join(self.base_path, prefix)
+    return FilesystemKV(new_base, self.extension, self.parse, self.dump)

@@ -63,12 +63,15 @@ class CosmosPartitionKV(KV[T], ContainerMixin[T], Generic[T]):
     
   @azure_safe
   async def has(self, key: str):
-    async with self.container_manager() as cc:
-      query = 'SELECT c.id FROM c WHERE c.id = @key'
-      params: list[dict] = [{'name': '@key', 'value': encode(key)}]
-      async for _ in cc.query_items(query=query, parameters=params, partition_key=self.partition_key):
-        return Right(True)
-      return Right(False)
+    try:
+      async with self.container_manager() as cc:
+        query = 'SELECT c.id FROM c WHERE c.id = @key'
+        params: list[dict] = [{'name': '@key', 'value': encode(key)}]
+        async for _ in cc.query_items(query=query, parameters=params, partition_key=self.partition_key):
+          return Right(True)
+    except CosmosResourceNotFoundError:
+      ...
+    return Right(False)
 
   @AI.lift
   async def keys(self):
