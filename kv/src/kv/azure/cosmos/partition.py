@@ -41,7 +41,7 @@ class CosmosPartitionKV(KV[T], ContainerMixin[T], Generic[T]):
   @azure_safe
   async def insert(self, key: str, value: T):
     async with self.container_manager() as cc:
-      item = {'id': encode(key), 'partition': self.partition_key, 'value': self.dump(value) }
+      item = {'id': encode(key), 'key': key, 'partition': self.partition_key, 'value': self.dump(value) }
       try:
         await cc.upsert_item(item)
       except CosmosResourceNotFoundError:
@@ -52,7 +52,7 @@ class CosmosPartitionKV(KV[T], ContainerMixin[T], Generic[T]):
   @azure_safe
   async def read(self, key: str):
     async with self.container_manager() as cc:
-      item = await cc.read_item(item=key, partition_key=self.partition_key)
+      item = await cc.read_item(item=encode(key), partition_key=self.partition_key)
       return self.parse(item['value'])
 
   @azure_safe
@@ -65,7 +65,7 @@ class CosmosPartitionKV(KV[T], ContainerMixin[T], Generic[T]):
   async def has(self, key: str):
     async with self.container_manager() as cc:
       query = 'SELECT c.id FROM c WHERE c.id = @key'
-      params: list[dict] = [{'name': '@key', 'value': key}]
+      params: list[dict] = [{'name': '@key', 'value': encode(key)}]
       async for _ in cc.query_items(query=query, parameters=params, partition_key=self.partition_key):
         return Right(True)
       return Right(False)

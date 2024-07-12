@@ -1,7 +1,7 @@
 from typing_extensions import TypeVar, Callable, Awaitable, ParamSpec, Generic, TypedDict
 from dataclasses import dataclass, KW_ONLY
 from contextlib import asynccontextmanager
-from urllib.parse import quote, unquote
+import base64
 from haskellian import Either, Left, Right, promise as P
 from azure.cosmos import PartitionKey
 from azure.cosmos.aio import CosmosClient
@@ -13,25 +13,25 @@ T = TypeVar('T')
 L = TypeVar('L')
 
 def encode(key: str):
-  return quote(key, safe='')
+  return base64.urlsafe_b64encode(key.encode()).decode()
 
 def decode(encoded_key: str):
-  return unquote(encoded_key)
+  return base64.urlsafe_b64decode(encoded_key.encode()).decode()
 
 class Serializers(TypedDict, Generic[T]):
   parse: Callable[[dict|list|str], Either[InvalidData, T]]
   dump: Callable[[T], dict|list|str]
 
 def serializers(type: type[T]) -> Serializers[T]:
-  from pydantic import TypeAdapter
-  Type = TypeAdapter(type)
+  from pydantic import RootModel
+  Type = RootModel[type]
   def parse(x):
     try:
-      return Right(Type.validate_python(x))
+      return Right(Type.model_validate(x).root)
     except Exception as e:
       return Left(InvalidData(str(e)))
   def dump(x):
-    return Type.dump_python(x)
+    return Type(x).model_dump()
   return Serializers(parse=parse, dump=dump)
 
 def default_split(key: str) -> tuple[str, str]:
