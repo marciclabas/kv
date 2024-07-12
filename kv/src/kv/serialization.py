@@ -25,16 +25,16 @@ class default(Generic[T]):
 
 def serializers(type: type[T]) -> Serializers[T]:
   """Get default serializers for a type"""
-  from pydantic import TypeAdapter, ValidationError
-  Adapter = TypeAdapter(type)
+  from pydantic import RootModel, ValidationError
+  Root = RootModel[type]
 
   def parse(data: bytes):
     try:
-      return Right(Adapter.validate_json(data))
+      return Right(Root.model_validate_json(data).root)
     except ValidationError as e:
       return Left(InvalidData(str(e)))
     
   def dump(value: T):
-    return Adapter.dump_json(value, exclude_none=True)
+    return Root(value).model_dump_json(exclude_none=True)
   
   return Serializers(parse=parse, dump=dump)
