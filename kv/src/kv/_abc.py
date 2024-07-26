@@ -70,6 +70,15 @@ class KV(ABC, Generic[T]):
   def read(self, key: str) -> Promise[Either[ReadError, T]]:
     """Read item with key `key`. Returns `Left[InexistentItem]` if the item does not exist."""
 
+  @P.lift
+  @E.do[DBError|InvalidData]()
+  async def safe_read(self, key: str) -> T | None:
+    """Read item with key `key`. Returns `None` if the item does not exist."""
+    e = await self.read(key)
+    if e.tag == 'left' and e.value.reason == 'inexistent-item':
+      return None
+    return e.unsafe()
+
   @abstractmethod
   def delete(self, key: str) -> Promise[Either[DBError | InexistentItem, None]]:
     """Delete item with key `key`. Returns `Left[InexistentItem]` if the item does not exist."""
