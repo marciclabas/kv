@@ -25,11 +25,11 @@ class SQLiteKV(KV[T], Generic[T]):
     return f'SQLiteKV(db_path={self.db_path!r}, table={self.table!r}, dtype={self.dtype!r})'
 
   @staticmethod
-  def at(db_path: str, type: type[T], *, table: str = 'kv') -> 'SQLiteKV[T]':
+  def at(db_path: str, type: type[T] | None = None, *, table: str = 'kv') -> 'SQLiteKV[T]':
     dir = os.path.dirname(db_path)
     if dir != '':
       os.makedirs(dir, exist_ok=True)
-    if type is bytes:
+    if type is bytes or type is None:
       return SQLiteKV(sqlite3.connect(db_path), db_path, table, dtype='BLOB', **default[T].serializers)
     elif type is str:
       return SQLiteKV(sqlite3.connect(db_path), db_path, table, dtype='TEXT', **default[T].serializers)
