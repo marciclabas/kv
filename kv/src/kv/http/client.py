@@ -51,7 +51,7 @@ class ClientKV(LocatableKV[T], Generic[T]):
     )
   
   def __repr__(self):
-    return f'ClientKV({self.endpoint})'
+    return f'ClientKV({self.endpoint}, prefix={self.prefix_})'
   
   async def _req(
     self, method: Literal['GET', 'POST', 'DELETE'], path: str, *,
@@ -98,4 +98,4 @@ class ClientKV(LocatableKV[T], Generic[T]):
     return f"{self.endpoint.rstrip('/')}/read?key={quote(key)}&prefix={quote(self.prefix_)}"
   
   def prefixed(self, prefix: str):
-    return ClientKV(self.endpoint, self.parse, self.dump, self.request, self.prefix_ + prefix)
+    return ClientKV(self.endpoint, self.parse, self.dump, self.request, self.prefix_ + '/' + prefix)
