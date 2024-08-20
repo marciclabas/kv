@@ -32,7 +32,7 @@ class ClientKV(LocatableKV[T], Generic[T]):
   parse: Parse[T] = default[T].parse
   dump: Dump[T] = default[T].dump
   request: Request = default_request
-  prefix: str = ''
+  prefix_: str = ''
 
   @classmethod
   @overload
@@ -65,28 +65,28 @@ class ClientKV(LocatableKV[T], Generic[T]):
 
   @P.lift
   async def read(self, key: str):
-    r = await self._req('GET', 'read', query={'prefix': self.prefix, 'key': key})
+    r = await self._req('GET', 'read', query={'prefix': self.prefix_, 'key': key})
     return r.bind(self.parse)
   
   @P.lift
   async def insert(self, key: str, value: T):
-    query = {'prefix': self.prefix, 'key': key}
+    query = {'prefix': self.prefix_, 'key': key}
     r = await self._req('POST', 'insert', data=self.dump(value), query=query)
     return r.fmap(lambda _: None)
     
   @P.lift
   async def delete(self, key: str):
-    r = await self._req('DELETE', 'delete', query={'prefix': self.prefix, 'key': key})
+    r = await self._req('DELETE', 'delete', query={'prefix': self.prefix_, 'key': key})
     return r.fmap(lambda _: None)
   
   @P.lift
   async def clear(self):
-    r = await self._req('DELETE', 'clear', query={'prefix': self.prefix})
+    r = await self._req('DELETE', 'clear', query={'prefix': self.prefix_})
     return r.fmap(lambda _: None)
 
   @AI.lift
   async def keys(self) -> AsyncIterable[Either[DBError, str]]:
-    r = await self._req('GET', 'keys', query={'prefix': self.prefix})
+    r = await self._req('GET', 'keys', query={'prefix': self.prefix_})
     keys = r.fmap(validate_seq)  
     if keys.tag == 'left':
       yield Left(keys.value)
@@ -95,7 +95,7 @@ class ClientKV(LocatableKV[T], Generic[T]):
         yield key
 
   def url(self, key: str, /, *, expiry: datetime | None = None) -> str:
-    return f"{self.endpoint.rstrip('/')}/read?key={quote(key)}&prefix={quote(self.prefix)}"
+    return f"{self.endpoint.rstrip('/')}/read?key={quote(key)}&prefix={quote(self.prefix_)}"
   
   def prefixed(self, prefix: str):
-    return ClientKV(self.endpoint, self.parse, self.dump, self.request, self.prefix + prefix)
+    return ClientKV(self.endpoint, self.parse, self.dump, self.request, self.prefix_ + prefix)
