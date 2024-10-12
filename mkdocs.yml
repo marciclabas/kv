@@ -1,0 +1,28 @@
+site_name: KV
+repo_name: kv
+repo_url: https://github.com/marciclabas/kv
+
+theme:
+  name: material
+  features:
+    - content.code.copy
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Supported Backends: supported-backends.md
+  - Prefixing: prefixing.md
+  - Backends:
+    - Filesystem: backends/filesystem.md
+    - SQLite: backends/sqlite.md
+    - SQL: backends/sql.md
+    - Azure Blob Storage: backends/blob.md
+    - Azure Cosmos DB: backends/cosmos.md
+    - HTTP Client/Server: backends/http.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+
+extra:
+  social: []
