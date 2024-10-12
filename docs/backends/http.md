@@ -16,6 +16,12 @@ api = ServerKV(kv) # FastAPI
 uvicorn.run(api, host='0.0.0.0', port=8000)
 ```
 
+Or you can use the CLI:
+
+```bash
+kv serve 'file://path/to/folder'
+```
+
 ### Client
 
 ```python

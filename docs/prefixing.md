@@ -51,4 +51,4 @@ kv.prefix('user1/images/cats')
 
 Prefixing has a default implementation using string prefixes. Specific backends may provide more efficient implementations (like the filesystem).
 
-To check out the details, go to the [Supported Backends](supported-backends.md) page.
+To check out the details, check out the specific backend pages. Links can be found in the [Supported Backends](supported-backends.md) page.

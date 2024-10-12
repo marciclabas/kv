@@ -29,4 +29,6 @@ kv = KV.of('file://path/to/folder')
 | Redis | `redis://localhost:6379/0` | `python-kv[redis]` |
 | [Azure Blob Storage](backends/blob.md) | `azure+blob://<connection_string>` | `python-kv[blob]` |
 | [Azure Cosmos DB](backends/cosmos.md) | `azure+cosmos://<connection_string>` | `python-kv[cosmos]` |
-| HTTP Client | `http://example.com/kv` | `python-kv[client]` |
+| [HTTP Client](backends/http.md) | `http://example.com/kv` | `python-kv[client]` |
+
+Next up, a powerful mechanism: [prefixing](prefixing.md)

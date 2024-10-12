@@ -31,3 +31,5 @@ You can also copy and move data between `KV`s:
 |--------|---------|
 | `copy` | `await kv.copy('user1', other_kv, to_key='other-user1')` |
 | `move` | `await kv.move('user1', other_kv, to_key='other-user1')` |
+
+Let's explore the [available backends](supported-backends.md)!

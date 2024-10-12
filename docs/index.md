@@ -6,4 +6,6 @@
 pip install python-kv
 ```
 
-To install specific backends, see [Supported Backends](supported-backends.md).
+`KV` supports multiple backends, including the filesystem, SQLite, Redis, Azure Blob, and many more.
+
+Let's [get started](getting-started.md)!
