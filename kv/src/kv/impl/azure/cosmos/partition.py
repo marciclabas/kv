@@ -2,8 +2,7 @@ from typing import TypeVar, Generic, Callable, Any
 from dataclasses import dataclass
 from azure.cosmos.aio import CosmosClient
 from azure.cosmos.exceptions import CosmosResourceNotFoundError
-from haskellian import Left, Right, asyn_iter as AI
-from kv import DBError, KV
+from kv import KVError, KV
 from .util import azure_safe, ContainerMixin, serializers, encode, decode
 
 T = TypeVar('T')
@@ -47,7 +46,6 @@ class CosmosPartitionKV(KV[T], ContainerMixin[T], Generic[T]):
       except CosmosResourceNotFoundError:
         await self.create()
         await cc.upsert_item(item)
-      return Right(None)
 
   @azure_safe
   async def read(self, key: str):
@@ -59,7 +57,6 @@ class CosmosPartitionKV(KV[T], ContainerMixin[T], Generic[T]):
   async def delete(self, key: str):
     async with self.container_manager() as cc:
       await cc.delete_item(item=encode(key), partition_key=self.partition_key)
-      return Right(None)
     
   @azure_safe
   async def has(self, key: str):
@@ -68,35 +65,32 @@ class CosmosPartitionKV(KV[T], ContainerMixin[T], Generic[T]):
         query = 'SELECT c.id FROM c WHERE c.id = @key'
         params: list[dict] = [{'name': '@key', 'value': encode(key)}]
         async for _ in cc.query_items(query=query, parameters=params, partition_key=self.partition_key):
-          return Right(True)
+          return True
     except CosmosResourceNotFoundError:
       ...
-    return Right(False)
+    return False
 
-  @AI.lift
   async def keys(self):
     try:
       async with self.container_manager() as cc:
         query = 'SELECT c.id FROM c'
         async for item in cc.query_items(query=query, partition_key=self.partition_key):
-          yield Right(decode(item['id']))
+          yield decode(item['id'])
     except CosmosResourceNotFoundError:
       ...
     except Exception as e:
-      yield Left(DBError(e))
+      raise KVError(e)
 
-  @AI.lift
   async def items(self):
     try:
       async with self.container_manager() as cc:
         query = 'SELECT c.id, c["value"] FROM c'
         async for item in cc.query_items(query=query, partition_key=self.partition_key):
-          e = self.parse(item['value'])
-          yield e.fmap(lambda v: (decode(item['id']), v))
+          yield decode(item['id']), self.parse(item['value'])
     except CosmosResourceNotFoundError:
       ...
     except Exception as e:
-      yield Left(DBError(e))
+      raise KVError(e) from e
 
   @azure_safe
   async def clear(self):
@@ -105,4 +99,3 @@ class CosmosPartitionKV(KV[T], ContainerMixin[T], Generic[T]):
         await cc.delete_all_items_by_partition_key(self.partition_key)
     except CosmosResourceNotFoundError:
       ...
-    return Right(None)

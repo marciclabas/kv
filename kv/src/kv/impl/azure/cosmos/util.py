@@ -2,11 +2,10 @@ from typing_extensions import TypeVar, Callable, Awaitable, ParamSpec, Generic, 
 from dataclasses import dataclass, KW_ONLY
 from contextlib import asynccontextmanager
 import base64
-from haskellian import Either, Left, Right, promise as P
 from azure.cosmos import PartitionKey
 from azure.cosmos.aio import CosmosClient
 from azure.core.exceptions import ResourceNotFoundError
-from kv import DBError, InexistentItem, InvalidData
+from kv import KVError, InexistentItem, InvalidData
 
 Ps = ParamSpec('Ps')
 T = TypeVar('T')
@@ -19,17 +18,17 @@ def decode(encoded_key: str):
   return base64.urlsafe_b64decode(encoded_key.encode()).decode()
 
 class Serializers(TypedDict, Generic[T]):
-  parse: Callable[[dict|list|str], Either[InvalidData, T]]
+  parse: Callable[[dict|list|str], T]
   dump: Callable[[T], dict|list|str]
 
 def serializers(type: type[T]) -> Serializers[T]:
-  from pydantic import RootModel
+  from pydantic import RootModel, ValidationError
   Type = RootModel[type]
   def parse(x):
     try:
-      return Right(Type.model_validate(x).root)
-    except Exception as e:
-      return Left(InvalidData(str(e)))
+      return Type.model_validate(x).root
+    except ValidationError as e:
+      raise InvalidData from e
   def dump(x):
     return Type(x).model_dump()
   return Serializers(parse=parse, dump=dump)
@@ -41,23 +40,22 @@ def default_split(key: str) -> tuple[str, str]:
 def default_merge(a: str, b: str) -> str:
   return f'{a}/{b}' if a != 'default' else b
 
-def azure_safe(coro: Callable[Ps, Awaitable[Either[L, T]]]):
-  @P.lift
-  async def wrapper(*args: Ps.args, **kwargs: Ps.kwargs) -> Either[L|DBError, T]:
+def azure_safe(coro: Callable[Ps, Awaitable[T]]):
+  async def wrapper(*args: Ps.args, **kwargs: Ps.kwargs) -> T:
     try:
       return await coro(*args, **kwargs)
     except ResourceNotFoundError as e:
-      return Left(InexistentItem(detail=e)) # type: ignore
+      raise InexistentItem from e
     except Exception as e:
-      return Left(DBError(e))
-  return wrapper # type: ignore
+      raise KVError(str(e)) from e
+  return wrapper
 
 @dataclass
 class DatabaseMixin(Generic[T]):
   client: Callable[[], CosmosClient]
   _: KW_ONLY
   db: str
-  parse: Callable[[dict|list|str], Either[InvalidData, T]]
+  parse: Callable[[dict|list|str], T]
   dump: Callable[[T], dict|list|str]
 
   @asynccontextmanager

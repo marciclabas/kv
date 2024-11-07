@@ -1,8 +1,8 @@
-from typing import TypeVar
+from typing import TypeVar, Any
 from datetime import datetime
 from pydantic import TypeAdapter
 import jwt
-from fastapi import FastAPI, Response, Request, Body, HTTPException
+from fastapi import FastAPI, Response, Request, HTTPException
 from kv import KV, InexistentItem
 
 T = TypeVar('T')
@@ -15,11 +15,11 @@ def verify_token(*, token: str, secret: str, now: datetime | None = None) -> boo
   except jwt.PyJWTError:
     return False
 
-def ServerKV(kv: KV[T], *, type: type[T] | None = None, secret: str | None = None):
+def ServerKV(kv: KV[T], *, type: type[T], secret: str | None = None):
 
   app = FastAPI(generate_unique_id_function=lambda r: r.name)
 
-  if type and type is not bytes:
+  if type is not bytes:
     parse = TypeAdapter(type).validate_json
   else:
     parse = lambda x: x
@@ -43,7 +43,6 @@ def ServerKV(kv: KV[T], *, type: type[T] | None = None, secret: str | None = Non
 
   @app.get('/item/{key:path}')
   async def read(key: str, *, prefix: str = '') -> T:
-    print('Searching for', key)
     try:
       return await _kv(prefix).read(key)
     except InexistentItem:

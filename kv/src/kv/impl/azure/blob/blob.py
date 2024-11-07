@@ -1,11 +1,10 @@
 from typing import TypeVar, Generic, Callable
 from dataclasses import dataclass
 from datetime import datetime
-from haskellian import asyn_iter as AI, promise as P, either as E
 from kv import LocatableKV
 from kv.serialization import Parse, Dump, default, serializers
-from kv.azure import BlobContainerKV
 from azure.storage.blob.aio import BlobServiceClient
+from .container import BlobContainerKV
 
 T = TypeVar('T')
 U = TypeVar('U')
@@ -67,26 +66,22 @@ class BlobKV(LocatableKV[T], Generic[T]):
         yield c.name or ''
   
   async def container_keys(self, container: str):
-    async for e in self.prefixed(container).keys():
-      yield e.fmap(lambda key: self.merge_key(container, key))
+    async for key in self.prefixed(container).keys():
+      yield self.merge_key(container, key)
 
-  @AI.lift
   async def keys(self):
     async for container in self.containers():
       async for key in self.container_keys(container):
         yield key
   
-  @AI.lift
   async def items(self):
     async for container in self.containers():
       async for item in self.prefixed(container).items():
         yield item
 
-  @P.lift
-  @E.do()
   async def clear(self):
     async for container in self.containers():
-      (await self.prefixed(container).clear()).unsafe()
+      await self.prefixed(container).clear()
 
 
   def url(self, key: str, *, expiry: datetime | None = None) -> str:

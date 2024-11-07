@@ -1,11 +1,11 @@
-from typing_extensions import TypeVar, overload
+from typing_extensions import TypeVar, overload, Any
 from urllib.parse import urlparse, parse_qs, unquote
 from pydantic import BaseModel
 from kv import KV
 
 T = TypeVar('T')
 
-def parse_type(type: str):
+def parse_type(type: str) -> type:
   if type == 'dict':
     return dict
   if type == 'list':
@@ -21,15 +21,17 @@ def parse_type(type: str):
   if type == 'bool':
     return bool
   if type == 'bytes':
-    return None
+    return bytes
+  if type == 'any':
+    return Any # type: ignore
   raise ValueError(f'Invalid type: {type}')
 
 class Params(BaseModel):
   prefix: str | None = None
-  type: str | None = None
+  type: str = 'any'
 
 class HTTPParams(Params):
-  token: str | None = None
+  secret: str | None = None
 
 class AzureBlobParams(Params):
   container: str | None = None
@@ -58,17 +60,17 @@ def parse(conn_str: str, type: type[T] | None = None): # type: ignore
   query = { k: v[0] for k, v in query.items() }
 
   params = Params(**query)
-  type = type or params.type and parse_type(params.type) # type: ignore
+  type = type or parse_type(params.type)
 
   if scheme in ('http', 'https'):
     params = HTTPParams(**query)
-    from kv.http import ClientKV
+    from kv import ClientKV
     url = f'{scheme}://{endpoint}'
-    kv = ClientKV.new(url, type, token=params.token)
+    kv = ClientKV.new(url, type, secret=params.secret)
 
   elif scheme == 'azure+blob':
     params = AzureBlobParams(**query)
-    from kv.azure import BlobKV, BlobContainerKV
+    from kv import BlobKV, BlobContainerKV
     if params.container:
       kv = BlobContainerKV.from_conn_str(endpoint, params.container, type)
     else:
@@ -76,18 +78,13 @@ def parse(conn_str: str, type: type[T] | None = None): # type: ignore
 
   elif scheme == 'azure+cosmos':
     params = CosmosParams(**query)
-    from kv.azure import CosmosKV, CosmosContainerKV, CosmosPartitionKV
+    from kv import CosmosKV, CosmosContainerKV, CosmosPartitionKV
     if params.container and params.partition:
       kv = CosmosPartitionKV.from_conn_str(endpoint, type, db=params.db, container=params.container, partition_key=params.partition)
     elif params.container:
       kv = CosmosContainerKV.from_conn_str(endpoint, type, db=params.db, container=params.container)
     else:
       kv = CosmosKV.from_conn_str(endpoint, type, db=params.db)
-
-  elif scheme == 'sqlite':
-    params = SQLParams(**query)
-    from kv import SQLiteKV
-    kv = SQLiteKV.at(endpoint, type, table=params.table)
 
   elif scheme.startswith('sql+'):
     params = SQLParams(**query)

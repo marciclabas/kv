@@ -1,20 +1,19 @@
 from typing_extensions import Generic, TypeVar, Callable, overload, ParamSpec, Awaitable, AsyncIterable
 from dataclasses import dataclass
 import redis.asyncio as redis
-from haskellian import Left, Right, Either, promise as P, asyn_iter as AI
-from kv import KV, DBError, InexistentItem, ReadError
+from kv import KV, KVError, InexistentItem
 from kv.serialization import Parse, Dump, default, serializers
 
 T = TypeVar('T')
 L = TypeVar('L')
 Ps = ParamSpec('Ps')
 
-def redis_safe(f: Callable[Ps, Awaitable[Either[L, T]]]):
-  async def wrapper(*args: Ps.args, **kwargs: Ps.kwargs) -> Either[DBError|L, T]:
+def redis_safe(f: Callable[Ps, Awaitable[T]]):
+  async def wrapper(*args: Ps.args, **kwargs: Ps.kwargs) -> T:
     try:
       return await f(*args, **kwargs)
     except redis.RedisError as e:
-      return Left(DBError(str(e)))
+      raise KVError(str(e)) from e
   return wrapper
 
 def ensure_str(s: str | bytes) -> str:
@@ -36,47 +35,40 @@ class RedisKV(KV[T], Generic[T]):
     ...
   @staticmethod
   @overload
-  def from_url(url: str, type: type[T]) -> 'RedisKV[T]':
+  def from_url(url: str, type: type[T] | None = None) -> 'RedisKV[T]':
     ...
   @staticmethod
   def from_url(url: str, type = None, parse = default[T].parse, dump = default[T].dump) -> 'RedisKV[T]':
     client = redis.Redis.from_url(url)
     return RedisKV(client, parse, dump) if type is None else RedisKV(client, **serializers(type))
 
-  @P.lift
   @redis_safe
   async def insert(self, key: str, value: T):
-    return Right(await self.client.set(key, self.dump(value)))
+    await self.client.set(key, self.dump(value))
   
-  @P.lift
   @redis_safe
-  async def read(self, key: str) -> Either[ReadError, T]:
+  async def read(self, key: str) -> T:
     if (val := await self.client.get(key)) is None:
-      return Left(InexistentItem(key))
+      raise InexistentItem(key)
     else:
       return self.parse(val)
   
-  @P.lift
   @redis_safe
-  async def delete(self, key: str) -> Either[DBError|InexistentItem, None]:
+  async def delete(self, key: str):
     if (await self.client.delete(key)) == 0:
-      return Left(InexistentItem(key))
-    else:
-      return Right(None)
+      raise InexistentItem(key)
   
-  @AI.lift
-  async def keys(self) -> AsyncIterable[Either[DBError, str]]:
+  async def keys(self) -> AsyncIterable[str]:
     try:
       keys = await self.client.keys()
       for key in keys:
-        yield Right(ensure_str(key))
+        yield ensure_str(key)
     except redis.RedisError as e:
-      yield Left(DBError(str(e)))
+      raise KVError(str(e)) from e
 
-  @P.lift
   @redis_safe
   async def clear(self):
-    return Right(await self.client.flushdb())
+    await self.client.flushdb()
   
   def __del__(self):
     import asyncio

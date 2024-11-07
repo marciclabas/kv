@@ -5,7 +5,7 @@ from urllib.parse import quote
 import jwt
 import httpx
 from kv import LocatableKV, KVError, InexistentItem
-from ..serialization import Parse, Dump, default, serializers
+from ...serialization import Parse, Dump, default, serializers
 
 T = TypeVar('T')
 U = TypeVar('U', default=bytes)

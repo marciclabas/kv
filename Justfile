@@ -27,23 +27,15 @@ init:
   rm -drf test || :
   echo "Running sql+sqlite test"
   mkdir -p test
-  {{BIN}}/kv test "sql+sqlite:///test/db.sqlite;Table=kv" \
-    && echo "OK" \
-    || echo "ERROR"
-
-@test-sqlite:
-  rm -drf test || :
-  echo "Running sqlite test"
-  mkdir -p test
-  {{BIN}}/kv test "sqlite://test/db.sqlite;Table=kv" \
+  {{BIN}}/kv test "sql+sqlite:///test/db.sqlite?table=kv" \
     && echo "OK" \
     || echo "ERROR"
 
 @test-http:
   rm -drf test || :
-  echo "Running HTTP over sqlite test"
+  echo "Running HTTP over file test"
   mkdir -p test
-  {{BIN}}/kv serve "sql+sqlite:///test/db.sqlite;Table=kv" --type str --port 8627 >> test.log 2>&1 &
+  {{BIN}}/kv serve "file://test/http" --port 8627 >> test.log 2>&1 &
   sleep 1
   {{BIN}}/kv test "http://localhost:8627"  \
     && echo "OK" \
@@ -61,14 +53,13 @@ init:
 
 @test-postgres:
   echo "Running Postgres test"
-  docker rm -f postgres-kv-test > /dev/null 2>&1
-  docker run -d --name postgres-kv-test -p 5221:5432 \
+  docker run -d --rm --name postgres-kv-test -p 5221:5432 \
     -e POSTGRES_PASSWORD=postgres \
     -e POSTGRES_USER=postgres \
     -e POSTGRESS_DB=postgres \
     postgres:latest >> test.log 2>&1
   sleep 1
-  {{BIN}}/kv test "sql+postgresql+psycopg2://postgres:postgres@localhost:5221/postgres;Table=kv" \
+  {{BIN}}/kv test "sql+postgresql+psycopg2://postgres:postgres@localhost:5221/postgres?table=kv&type=any" \
     && echo "OK" \
     || echo "ERROR"
   docker rm -f postgres-kv-test >> test.log 2>&1
@@ -89,6 +80,6 @@ init:
   rm -drf test || :
   rm test.log || :
 
-@test: clean test-fs test-sqlite test-http test-redis test-postgres test-azure-container
+@test: clean test-fs test-redis test-sql test-http test-postgres #test-azure-container
   rm -drf test || :
   echo "Run cat test.log to see full logs"

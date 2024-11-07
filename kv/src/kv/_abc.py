@@ -2,31 +2,26 @@ from typing_extensions import TypeVar, Generic, AsyncIterable, Literal, Any, TYP
 from abc import ABC, abstractmethod
 if TYPE_CHECKING:
   from datetime import datetime
-from haskellian import Either, Promise, AsyncIter, \
-  either as E, promise as P, asyn_iter as AI
 from dataclasses import dataclass
 
 class StrMixin:
   def __str__(self) -> str:
     return self.__repr__()
 
-@dataclass(eq=False)
-class InexistentItem(StrMixin, BaseException):
+@dataclass
+class KVError(StrMixin, BaseException):
+  detail: Any = None
+  
+@dataclass
+class InexistentItem(KVError):
   key: str | None = None
   detail: Any | None = None
   reason: Literal['inexistent-item'] = 'inexistent-item'
 
-@dataclass(eq=False)
-class DBError(StrMixin, BaseException):
-  detail: Any = None
-  reason: Literal['db-error'] = 'db-error'
-
-@dataclass(eq=False)
-class InvalidData(StrMixin, BaseException):
+@dataclass
+class InvalidData(KVError):
   detail: Any = None
   reason: Literal['invalid-data'] = 'invalid-data'
-
-ReadError = DBError | InvalidData | InexistentItem
 
 T = TypeVar('T')
 U = TypeVar('U')
@@ -63,74 +58,71 @@ class KV(ABC, Generic[T]):
     return parse(conn_str, type)
   
   @abstractmethod
-  def insert(self, key: str, value: T) -> Promise[Either[DBError, None]]:
+  async def insert(self, key: str, value: T):
     """Insert entry: `self[key] = value`"""
 
   @abstractmethod
-  def read(self, key: str) -> Promise[Either[ReadError, T]]:
-    """Read item with key `key`. Returns `Left[InexistentItem]` if the item does not exist."""
+  async def read(self, key: str) -> T:
+    """Read item with key `key`. Raises `InexistentItem` if the item does not exist."""
 
-  @P.lift
-  @E.do[DBError|InvalidData]()
   async def safe_read(self, key: str) -> T | None:
     """Read item with key `key`. Returns `None` if the item does not exist."""
-    e = await self.read(key)
-    if e.tag == 'left' and e.value.reason == 'inexistent-item':
-      return None
-    return e.unsafe()
+    try:
+      return await self.read(key)
+    except InexistentItem:
+      ...
 
   @abstractmethod
-  def delete(self, key: str) -> Promise[Either[DBError | InexistentItem, None]]:
+  async def delete(self, key: str):
     """Delete item with key `key`. Returns `Left[InexistentItem]` if the item does not exist."""
 
-  @AI.lift
-  async def items(self) -> AsyncIterable[Either[DBError | InvalidData, tuple[str, T]]]:
+  async def items(self) -> AsyncIterable[tuple[str, T]]:
     """Iterate over all items in the `KV`"""
-    @E.do[DBError|InvalidData]()
-    async def fetch_one(key: Either[DBError, str]):
-      k = key.unsafe()
-      return k, (await self.read(k)).unsafe()
-    async for e in self.keys():
-      yield (await fetch_one(e))
+    async for key in self.keys():
+      yield key, await self.read(key)
 
-  @P.lift
-  @E.do[DBError]()
-  async def has(self, key: str):
+  async def has(self, key: str) -> bool:
     """Does the `KV` have `key`?"""
-    async for k in self.keys().map(E.unsafe):
+    async for k in self.keys():
       if k == key:
         return True
     return False
   
   @abstractmethod
-  def keys(self) -> AsyncIter[Either[DBError, str]]:
+  def keys(self) -> AsyncIterable[str]:
     """Read all keys in the `KV`"""
 
-  @AI.lift
-  async def values(self) -> AsyncIterable[Either[DBError|InvalidData, T]]:
+  async def values(self) -> AsyncIterable[T]:
     """Iterate over all values in the `KV`"""
-    async for e in self.items():
-      yield e.fmap(lambda it: it[1])
+    async for _, val in self.items():
+      yield val
 
-  @P.lift
-  @E.do[ReadError]()
   async def copy(self, key: str, to: 'KV[T]', to_key: str):
     """Copy `self[key]` to `to[to_key]`"""
-    value = (await self.read(key)).unsafe()
-    return (await to.insert(to_key, value)).unsafe()
+    val = await self.read(key)
+    await to.insert(to_key, val)
 
-  @P.lift
-  @E.do[ReadError]()
   async def move(self, key: str, to: 'KV[T]', to_key: str):
     """Move `self[key]` to `to[to_key]`"""
-    (await self.copy(key, to, to_key)).unsafe()
-    (await self.delete(key)).unsafe()
+    await self.copy(key, to, to_key)
+    await self.delete(key)
 
-  @E.do[DBError]()
+  async def copy_all(self, to: 'KV[T]', *, max_concurrent: int = 16):
+    import asyncio
+    sem = asyncio.Semaphore(max_concurrent)
+    async def copy_one(key):
+      async with sem:
+        await self.copy(key, to, key)
+    await asyncio.gather(*[copy_one(key) async for key in self.keys()])
+
+  async def move_all(self, to: 'KV[T]', *, max_concurrent: int = 16):
+    await self.copy_all(to, max_concurrent=max_concurrent)
+    await self.clear()
+
   async def clear(self):
     """Delete all entries"""
-    async for key in self.keys().map(E.unsafe):
-      (await self.delete(key)).unsafe()
+    async for key in self.keys():
+      await self.delete(key)
 
   def prefixed(self, prefix: str, /) -> 'Self':
     """Create a `KV` with all keys prefixed with `prefix`, without nesting."""

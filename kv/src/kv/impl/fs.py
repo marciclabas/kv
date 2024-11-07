@@ -1,9 +1,8 @@
-from typing_extensions import TypeVar, Generic, ParamSpec, overload
+from typing_extensions import TypeVar, Generic, ParamSpec, overload, Iterable, Callable, Coroutine
+from functools import wraps
 from dataclasses import dataclass
 import os
-from haskellian import Left, Right, promise as P, asyn_iter as AI
-import fs
-from kv import KV, DBError, InexistentItem
+from kv import KV, KVError, InexistentItem
 from kv.serialization import Parse, Dump, default, serializers
 
 T = TypeVar('T')
@@ -11,12 +10,31 @@ U = TypeVar('U')
 L = TypeVar('L')
 Ps = ParamSpec('Ps')
 
-def parse_err(err: OSError) -> DBError | InexistentItem:
-  match err:
-    case FileNotFoundError():
-      return InexistentItem(detail=str(err))
-    case OSError():
-      return DBError(str(err))
+def ensure_path(file: str):
+  """Creates the path to `file`'s folder if it didn't exist
+  - E.g. `ensure('path/to/file.txt')` will create `'path/to'` if needed
+  """
+  dir = os.path.dirname(file)
+  if dir != '':
+    os.makedirs(dir, exist_ok=True)
+
+def rec_paths(base_path: str) -> Iterable[str]:
+  """Returns all files inside `base_path`, recursively, relative to `base_path`"""
+  for root, _, files in os.walk(base_path):
+    for file in files:
+      path = os.path.join(root, file)
+      yield os.path.relpath(path, start=base_path)
+
+def wrap_exceptions(f: Callable[Ps, Coroutine[None, None, T]]) -> Callable[Ps, Coroutine[None, None, T]]:
+  @wraps(f)
+  async def wrapper(*args: Ps.args, **kwargs: Ps.kwargs) -> T:
+    try:
+      return await f(*args, **kwargs)
+    except FileNotFoundError as e:
+      raise InexistentItem(str(e)) from e
+    except OSError as e:
+      raise KVError(str(e)) from e
+  return wrapper
 
 @dataclass
 class FilesystemKV(KV[T], Generic[T]):
@@ -54,48 +72,51 @@ class FilesystemKV(KV[T], Generic[T]):
   def key(self, path: str):
     return path.removesuffix(self.extension)
   
-  @P.lift
-  async def insert(self, key: str, value: T): # type: ignore
-    return fs.write(self.path(key), self.dump(value)).mapl(parse_err)
+  @wrap_exceptions
+  async def insert(self, key: str, value: T):
+    ensure_path(self.path(key))
+    with open(self.path(key), 'wb') as f:
+      f.write(self.dump(value))
 
-  @P.lift
-  async def read(self, key: str): # type: ignore
-    return fs.read(self.path(key)).mapl(parse_err).bind(self.parse)
+  @wrap_exceptions
+  async def read(self, key: str):
+    with open(self.path(key), 'rb') as f:
+      return self.parse(f.read())
     
-  @P.lift
+  @wrap_exceptions
   async def delete(self, key: str):
-    return fs.delete(self.path(key)).mapl(parse_err)
+    os.remove(self.path(key))
+    try: # clean up empty directories
+      os.removedirs(os.path.dirname(self.path(key)))
+    except:
+      ...
   
-  @P.lift
   async def has(self, key: str):
-    return Right(os.path.exists(self.path(key)))
+    return os.path.exists(self.path(key))
   
-  @AI.lift
   async def keys(self):
-    for key in fs.filenames(self.base_path).map(self.key):
-      yield Right(key)
+    for name in rec_paths(self.base_path):
+      yield self.key(name)
 
-  @P.lift
   async def copy(self, key: str, to: 'KV[T]', to_key: str):
     if not isinstance(to, FilesystemKV):
       return await super().copy(key, to, to_key)
-    return fs.copy(self.path(key), to.path(to_key)).mapl(parse_err)
+    import shutil
+    ensure_path(to.path(to_key))
+    shutil.copy(self.path(key), to.path(to_key))
   
-  @P.lift
   async def move(self, key: str, to: 'KV[T]', to_key: str):
     if not isinstance(to, FilesystemKV):
       return await super().move(key, to, to_key)
-    return fs.move(self.path(key), to.path(to_key)).mapl(parse_err)
-  
-  @P.lift
+    import shutil
+    ensure_path(to.path(to_key))
+    shutil.move(self.path(key), to.path(to_key))
+
+  @wrap_exceptions
   async def clear(self):
-    from shutil import rmtree
-    try:
-      rmtree(self.base_path)
-      os.makedirs(self.base_path)
-      return Right(None)
-    except OSError as e:
-      return Left(DBError(str(e)))
+    import shutil
+    shutil.rmtree(self.base_path)
+    os.makedirs(self.base_path)
     
   def prefixed(self, prefix: str) -> 'FilesystemKV[T]':
     new_base = os.path.join(self.base_path, prefix)

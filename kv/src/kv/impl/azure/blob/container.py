@@ -2,10 +2,9 @@ from typing import TypeVar, Generic, Callable, ParamSpec, Awaitable, overload
 from dataclasses import dataclass
 from contextlib import asynccontextmanager
 from datetime import datetime
-from haskellian import Either, Left, Right, promise as P, asyn_iter as AI
 from azure.core.exceptions import ResourceNotFoundError
 from azure.storage.blob.aio import BlobServiceClient
-from kv import DBError, InexistentItem, LocatableKV
+from kv import KVError, InexistentItem, LocatableKV
 from kv.serialization import Parse, Dump, default, serializers
 from .util import blob_url
 
@@ -14,15 +13,14 @@ U = TypeVar('U')
 L = TypeVar('L')
 Ps = ParamSpec('Ps')
 
-def azure_safe(coro: Callable[Ps, Awaitable[Either[L, T]]]):
-  @P.lift
-  async def wrapper(*args: Ps.args, **kwargs: Ps.kwargs) -> Either[L|DBError, T]:
+def azure_safe(coro: Callable[Ps, Awaitable[T]]):
+  async def wrapper(*args: Ps.args, **kwargs: Ps.kwargs) -> T:
     try:
       return await coro(*args, **kwargs)
     except ResourceNotFoundError as e:
-      return Left(InexistentItem(detail=e)) # type: ignore
+      raise InexistentItem from e
     except Exception as e:
-      return Left(DBError(e))
+      raise KVError from e
   return wrapper # type: ignore
 
 @dataclass
@@ -68,31 +66,28 @@ class BlobContainerKV(LocatableKV[T], Generic[T]):
         await client.create_container()
       data = self.dump(value)
       await client.upload_blob(key, data, overwrite=True)
-      return Right(None)
 
   @azure_safe
   async def has(self, key: str):
     async with self.container_manager() as client:
       if not await client.exists():
-        return Right(False)
-      return Right(await client.get_blob_client(key).exists())
+        return False
+      return await client.get_blob_client(key).exists()
 
   @azure_safe
   async def delete(self, key: str):
     async with self.container_manager() as client:
       await client.delete_blob(key)
-      return Right(None)
   
-  @AI.lift
   async def keys(self):
     try:
       async with self.container_manager() as client:
         if not await client.exists():
           return
         async for name in client.list_blob_names():
-          yield Right(name)
+          yield name
     except Exception as e:
-      yield Left(DBError(e))
+      raise KVError(e) from e
 
   def url(self, key: str, *, expiry: datetime | None = None) -> str:
     bc = self.client().get_blob_client(self.container, key)
@@ -102,4 +97,3 @@ class BlobContainerKV(LocatableKV[T], Generic[T]):
   async def clear(self):
     async with self.container_manager() as client:
       await client.delete_container()
-      return Right(None)

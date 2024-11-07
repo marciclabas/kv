@@ -23,8 +23,7 @@ kv = KV.of('file://path/to/folder')
 ### Supported Backends
 | Backend | Example URL  | Installation |
 |---------|-------- | ------------ |
-| [Filesystem](backends/filesystem.md) | `file://path/to/folder` | `python-kv[fs]` |
-| [SQLite](backends/sqlite.md) | `sqlite://path/to.db?table=kv` | No deps |
+| [Filesystem](backends/filesystem.md) | `file://path/to/folder` | No deps |
 | [SQL](backends/sql.md) (`sqlalchemy`) | `sql+postgresql://user:pass@host/db` | `python-kv[sql]` |
 | Redis | `redis://localhost:6379/0` | `python-kv[redis]` |
 | [Azure Blob Storage](backends/blob.md) | `azure+blob://<connection_string>` | `python-kv[blob]` |

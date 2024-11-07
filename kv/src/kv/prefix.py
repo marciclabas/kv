@@ -1,7 +1,6 @@
 from typing import TypeVar, Generic
 from dataclasses import dataclass
-from haskellian import asyn_iter as AI, Right
-from kv import KV
+from kv import KV, LocatableKV, KVError
 
 T = TypeVar('T')
 
@@ -22,11 +21,12 @@ class PrefixedKV(KV[T], Generic[T]):
   def has(self, key: str):
     return self.kv.has(self.prefix_ + key)
   
-  @AI.lift
   async def keys(self):
-    async for e in self.kv.keys():
-      if e.tag == 'right' and e.value.startswith(self.prefix_):
-        yield Right(e.value.removeprefix(self.prefix_))
+    async for key in self.kv.keys():
+      if key.startswith(self.prefix_):
+        yield key.removeprefix(self.prefix_)
 
   def url(self, key: str, /, *, expiry=None):
-    return self.kv.url(self.prefix_ + key, expiry=expiry) # type: ignore
+    if not isinstance(self.kv, LocatableKV):
+      raise KVError('This KV is not locatable')
+    return self.kv.url(self.prefix_ + key, expiry=expiry)

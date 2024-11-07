@@ -1,12 +1,12 @@
 from typing_extensions import AsyncIterable, TypeVar, Generic, Any, overload
 from pydantic import RootModel
-from haskellian import Either, Left, Right, promise as P, asyn_iter as AI
 from sqlalchemy import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.exc import DatabaseError
 from sqlalchemy.types import BLOB, String
+from sqlalchemy.dialects.postgresql.types import BYTEA
 from sqltypes import ValidatedJSON
-from kv import KV, DBError, InexistentItem, InvalidData
+from kv import KV, KVError, InexistentItem
 
 T = TypeVar('T')
 U = TypeVar('U')
@@ -26,7 +26,7 @@ class SQLKV(KV[T], Generic[T]):
       class Table(Base): # type: ignore
         __tablename__ = table
         key: Mapped[str] = mapped_column(primary_key=True)
-        value: Mapped[bytes] = mapped_column(type_=BLOB)
+        value: Mapped[bytes] = mapped_column(type_=BYTEA if engine.dialect.name == 'postgresql' else BLOB)
 
     elif Type is str:
       self.dump = lambda x: x
@@ -47,6 +47,7 @@ class SQLKV(KV[T], Generic[T]):
         value: Mapped[RootModel[Type]] = mapped_column(type_=ValidatedJSON(Root))
 
     self.Table = Table
+    self.Base = Base
     Base.metadata.create_all(engine)
 
   def __repr__(self):
@@ -64,38 +65,34 @@ class SQLKV(KV[T], Generic[T]):
   def new(cls, conn_str: str, type: type[U] | None = None, *, table: str): # type: ignore
     from sqlalchemy import create_engine
     engine = create_engine(conn_str)
-    return cls(type or bytes, engine, table=table)
+    return cls(type or bytes, engine, table=table) # type: ignore
 
-  @P.lift
-  async def delete(self, key: str) -> Either[DBError | InexistentItem, None]:
+  async def delete(self, key: str):
     from sqlmodel import Session, select
     try:
       with Session(self.engine) as session:
         stmt = select(self.Table).where(self.Table.key == key)
         row = session.exec(stmt).first()
         if row is None:
-          return Left(InexistentItem(key))
+          raise InexistentItem(key)
         session.delete(row)
         session.commit()
-        return Right(None)
     except DatabaseError as e:
-      return Left(DBError(e))
+      raise KVError(e) from e
 
-  @P.lift
-  async def read(self, key: str) -> Either[DBError | InvalidData | InexistentItem, T]:
+  async def read(self, key: str) -> T:
     from sqlmodel import Session, select
     try:
       with Session(self.engine) as session:
         stmt = select(self.Table).where(self.Table.key == key)
         row = session.exec(stmt).first()
         if row is None:
-          return Left(InexistentItem(key))
-        return Right(self.parse(row.value))
+          raise InexistentItem(key)
+        return self.parse(row.value)
     except DatabaseError as e:
-      return Left(DBError(e))
+      raise KVError(e) from e
 
-  @P.lift
-  async def insert(self, key: str, value: T) -> Either[DBError, None]:
+  async def insert(self, key: str, value: T):
     from sqlmodel import Session, select
     try:
       with Session(self.engine) as session:
@@ -105,41 +102,36 @@ class SQLKV(KV[T], Generic[T]):
           session.delete(row)
         session.add(self.Table(key=key, value=self.dump(value)))
         session.commit()
-        return Right(None)
     except DatabaseError as e:
-      return Left(DBError(e))
+      raise KVError(e) from e
 
-  @AI.lift
-  async def keys(self) -> AsyncIterable[Either[DBError, str]]:
+  async def keys(self) -> AsyncIterable[str]:
     from sqlmodel import Session, select
     try:
       with Session(self.engine) as session:
         stmt = select(self.Table.key)
         for key in session.exec(stmt).all():
-          yield Right(key)
+          yield key
     except DatabaseError as e:
-      yield Left(DBError(e))
+      raise KVError(e) from e
 
-  @AI.lift
-  async def items(self, batch_size: int | None = None) -> AsyncIterable[Either[DBError | InvalidData, tuple[str, T]]]:
+  async def items(self, batch_size: int | None = None) -> AsyncIterable[tuple[str, T]]:
     from sqlmodel import Session, select
     try:
       with Session(self.engine) as session:
         result = session.exec(select(self.Table))
         while (batch := result.fetchmany(batch_size)) != []:
           for row in batch:
-            yield Right((row.key, self.parse(row.value)))
+            yield row.key, self.parse(row.value)
     except DatabaseError as e:
-      yield Left(DBError(e))
+      raise KVError(e) from e
 
 
-  @P.lift
   async def clear(self):
     from sqlmodel import Session, delete
     try:
       with Session(self.engine) as session:
         session.execute(delete(self.Table))
         session.commit()
-        return Right(None)
     except DatabaseError as e:
-      return Left(DBError(e))
+      raise KVError(e) from e
