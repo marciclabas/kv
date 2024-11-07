@@ -1,29 +1,18 @@
-from datetime import datetime
-from typing_extensions import TypeVar, Generic, Any, Literal, AsyncIterable, Sequence, overload
+from typing_extensions import TypeVar, Generic, Literal, AsyncIterable
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from urllib.parse import quote
-from pydantic import TypeAdapter, ValidationError
-from haskellian import Either, Left, Right, promise as P, asyn_iter as AI
-from kv import LocatableKV, ReadError, DBError
-from .req import Request, request as default_request, bound_request
+import jwt
+import httpx
+from kv import LocatableKV, KVError, InexistentItem
 from ..serialization import Parse, Dump, default, serializers
 
 T = TypeVar('T')
-U = TypeVar('U')
-ErrType = TypeAdapter(ReadError)
-SeqType = TypeAdapter(Sequence[Either[DBError, str]])
+U = TypeVar('U', default=bytes)
 
-def validate_left(raw_json: bytes, status: int) -> Left[DBError, Any]:
-  try:
-    return Left(ErrType.validate_json(raw_json))
-  except ValidationError:
-    return Left(DBError(f'Unexpected status code: {status}. Content: "{raw_json.decode()}"'))
-  
-def validate_seq(raw_json: bytes):
-  try:
-    return SeqType.validate_json(raw_json)
-  except Exception as e:
-    return [Left(DBError(e))]
+def sign_token(secret: str, expiry: datetime | None = None) -> str:
+  payload = {} if expiry is None else {'exp': expiry.timestamp()}
+  return jwt.encode(payload, secret, algorithm='HS256')
 
 @dataclass
 class ClientKV(LocatableKV[T], Generic[T]):
@@ -31,71 +20,64 @@ class ClientKV(LocatableKV[T], Generic[T]):
   endpoint: str
   parse: Parse[T] = default[T].parse
   dump: Dump[T] = default[T].dump
-  request: Request = default_request
+  secret: str | None = None
   prefix_: str = ''
 
   @classmethod
-  @overload
-  def new(cls, endpoint: str, *, token: str | None = None) -> 'ClientKV[bytes]':
-    ...
-  @classmethod
-  @overload
-  def new(cls, endpoint: str, type: type[U] | None = None, *, token: str | None = None) -> 'ClientKV[U]':
-    ...
-  @classmethod
-  def new(cls, endpoint: str, type: type[U] | None = None, *, token: str | None = None):
-    req = bound_request(headers={'Authorization': f'Bearer {token}'}) if token else default_request
-    return (
-      ClientKV(endpoint, **serializers(type), request=req)
-      if type else ClientKV(endpoint, request=req)
-    )
-  
+  def new(cls, endpoint: str, type: type[U] | None = None, *, secret: str | None = None) -> 'ClientKV[U]':
+    return ClientKV(endpoint, **serializers(type), secret=secret) if type else ClientKV(endpoint, secret=secret)
+    
   def __repr__(self):
     return f'ClientKV({self.endpoint}, prefix={self.prefix_})'
   
-  async def _req(
-    self, method: Literal['GET', 'POST', 'DELETE'], path: str, *,
-    data: bytes | str | None = None, query: dict = {}
-  ):
-    try:
-      r = await self.request(method, f"{self.endpoint.rstrip('/')}/{path.lstrip('/')}", data=data, params=query)
-      return Right(r.content) if r.status_code == 200 else validate_left(r.content, r.status_code)
-    except Exception as e:
-      return Left(DBError(e))
-
-  @P.lift
-  async def read(self, key: str):
-    r = await self._req('GET', 'read', query={'prefix': self.prefix_, 'key': key})
-    return r.bind(self.parse)
+  async def _req(self, method: Literal['GET', 'POST', 'DELETE'], path: str, *, data: bytes | str | None = None):
+    async with httpx.AsyncClient() as client:
+      endpoint = f'{self.endpoint.rstrip("/")}/{path.lstrip("/")}'
+      params = {}
+      if self.prefix_:
+        params['prefix'] = self.prefix_
+      if self.secret:
+        params['token'] = sign_token(self.secret, datetime.now() + timedelta(minutes=5))
+      return await client.request(method, endpoint, data=data, params=params) # type: ignore
   
-  @P.lift
+  async def read(self, key: str) -> T:
+    r = await self._req('GET', f'/item/{quote(key)}')
+    if r.status_code == 404:
+      raise InexistentItem(key)
+    if r.status_code != 200:
+      raise KVError(r.text)
+    return self.parse(r.content)
+  
   async def insert(self, key: str, value: T):
-    query = {'prefix': self.prefix_, 'key': key}
-    r = await self._req('POST', 'insert', data=self.dump(value), query=query)
-    return r.fmap(lambda _: None)
+    r = await self._req('POST', f'/item/{quote(key)}', data=self.dump(value))
+    if r.status_code != 200:
+      raise KVError(r.text)
     
-  @P.lift
   async def delete(self, key: str):
-    r = await self._req('DELETE', 'delete', query={'prefix': self.prefix_, 'key': key})
-    return r.fmap(lambda _: None)
+    r = await self._req('DELETE', f'/item/{quote(key)}')
+    if r.status_code == 404:
+      raise InexistentItem(key)
+    if r.status_code != 200:
+      raise KVError(r.text)
+    
+  async def has(self, key: str) -> bool:
+    r = await self._req('GET', f'/item/{quote(key)}/has')
+    return r.json()
   
-  @P.lift
-  async def clear(self):
-    r = await self._req('DELETE', 'clear', query={'prefix': self.prefix_})
-    return r.fmap(lambda _: None)
-
-  @AI.lift
-  async def keys(self) -> AsyncIterable[Either[DBError, str]]:
-    r = await self._req('GET', 'keys', query={'prefix': self.prefix_})
-    keys = r.fmap(validate_seq)  
-    if keys.tag == 'left':
-      yield Left(keys.value)
-    else:
-      for key in keys.value:
-        yield key
-
+  async def keys(self) -> AsyncIterable[str]:
+    r = await self._req('GET', '/keys')
+    if r.status_code != 200:
+      raise KVError(r.text)
+    for key in r.json():
+      yield key
+  
   def url(self, key: str, /, *, expiry: datetime | None = None) -> str:
-    return f"{self.endpoint.rstrip('/')}/read?key={quote(key)}&prefix={quote(self.prefix_)}"
+    url = f"{self.endpoint.rstrip('/')}/item/{quote(key)}?"
+    if self.prefix_:
+      url += f"prefix={quote(self.prefix_)}&"
+    if self.secret:
+      url += f"token={quote(sign_token(self.secret, expiry))}"
+    return url
   
   def prefixed(self, prefix: str):
-    return ClientKV(self.endpoint, self.parse, self.dump, self.request, self.prefix_ + '/' + prefix)
+    return ClientKV(endpoint=self.endpoint, parse=self.parse, dump=self.dump, secret=self.secret, prefix_=self.prefix_ + '/' + prefix)
