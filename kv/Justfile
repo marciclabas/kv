@@ -8,6 +8,7 @@ help:
 # Build the package (into `dist/`)
 build:
   cd {{PKG}} && \
+  pyright . && \
   rm -drf dist && \
   cp ../README.md . && \
   {{PYTHON}} -m build && \
