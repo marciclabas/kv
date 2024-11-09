@@ -18,11 +18,11 @@ build:
 publish: build
   cd {{PKG}} && \
   {{PYTHON}} -m twine upload dist/* && \
-  rm -drf dist
+  rm -drf dist && rm README.md
 
 # Increase patch version
 patch:
-  $BUMP {{PKG}}/pyproject.toml
+  $CIT_SCRIPTS/bump.sh {{PKG}}/pyproject.toml
 
 # Build and publish
 republish: patch build publish
