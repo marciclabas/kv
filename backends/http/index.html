@@ -524,16 +524,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#built-in-token-mechanism" class="md-nav__link">
-    <span class="md-ellipsis">
-      Built-in Token Mechanism
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Built-in Token Mechanism">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
   <a href="#server_1" class="md-nav__link">
     <span class="md-ellipsis">
       Server
@@ -548,44 +538,6 @@
       Client
     </span>
   </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#custom-authentication" class="md-nav__link">
-    <span class="md-ellipsis">
-      Custom Authentication
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Custom Authentication">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#server_2" class="md-nav__link">
-    <span class="md-ellipsis">
-      Server
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#client_2" class="md-nav__link">
-    <span class="md-ellipsis">
-      Client
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
         
@@ -680,16 +632,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#built-in-token-mechanism" class="md-nav__link">
-    <span class="md-ellipsis">
-      Built-in Token Mechanism
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Built-in Token Mechanism">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
   <a href="#server_1" class="md-nav__link">
     <span class="md-ellipsis">
       Server
@@ -704,44 +646,6 @@
       Client
     </span>
   </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#custom-authentication" class="md-nav__link">
-    <span class="md-ellipsis">
-      Custom Authentication
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Custom Authentication">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#server_2" class="md-nav__link">
-    <span class="md-ellipsis">
-      Server
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
-  <a href="#client_2" class="md-nav__link">
-    <span class="md-ellipsis">
-      Client
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
   
 </li>
         
@@ -789,54 +693,22 @@
 <a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">kv</span> <span class="o">=</span> <span class="n">KV</span><span class="o">.</span><span class="n">of</span><span class="p">(</span><span class="s1">&#39;http://localhost:8000&#39;</span><span class="p">)</span>
 </code></pre></div>
 <h2 id="authentication">Authentication</h2>
-<h3 id="built-in-token-mechanism">Built-in Token Mechanism</h3>
-<p>Simplest is to use this built-in mechanism for token-based authentication:</p>
 <h4 id="server_1">Server</h4>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="kn">import</span> <span class="nn">uvicorn</span>
 <a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="kn">from</span> <span class="nn">kv</span> <span class="kn">import</span> <span class="n">KV</span><span class="p">,</span> <span class="n">ServerKV</span>
 <a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
 <a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="n">kv</span> <span class="o">=</span> <span class="n">KV</span><span class="o">.</span><span class="n">of</span><span class="p">(</span><span class="s1">&#39;file://path/to/folder&#39;</span><span class="p">)</span>
-<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">api</span> <span class="o">=</span> <span class="n">ServerKV</span><span class="p">(</span><span class="n">kv</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="s1">&#39;supersecret&#39;</span><span class="p">)</span> <span class="c1"># FastAPI</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">api</span> <span class="o">=</span> <span class="n">ServerKV</span><span class="p">(</span><span class="n">kv</span><span class="p">,</span> <span class="n">secret</span><span class="o">=</span><span class="s1">&#39;supersecret&#39;</span><span class="p">)</span>
 <a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
 <a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="n">uvicorn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">api</span><span class="p">,</span> <span class="n">host</span><span class="o">=</span><span class="s1">&#39;0.0.0.0&#39;</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">8000</span><span class="p">)</span>
 </code></pre></div>
 <h4 id="client_1">Client</h4>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span> <span class="nn">kv</span> <span class="kn">import</span> <span class="n">KV</span>
-<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">kv</span> <span class="o">=</span> <span class="n">KV</span><span class="o">.</span><span class="n">of</span><span class="p">(</span><span class="s1">&#39;http://localhost:8000?token=supersecret&#39;</span><span class="p">)</span>
-</code></pre></div>
-<h3 id="custom-authentication">Custom Authentication</h3>
-<p>There's no authentication by default. You can easily use any mechanism you want.</p>
-<h4 id="server_2">Server</h4>
-<p>Use <code>fastapi</code>'s middleware:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">import</span> <span class="nn">uvicorn</span>
-<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="kn">from</span> <span class="nn">kv</span> <span class="kn">import</span> <span class="n">KV</span><span class="p">,</span> <span class="n">ServerKV</span>
-<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="n">kv</span> <span class="o">=</span> <span class="n">KV</span><span class="o">.</span><span class="n">of</span><span class="p">(</span><span class="s1">&#39;file://path/to/folder&#39;</span><span class="p">)</span>
-<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="n">api</span> <span class="o">=</span> <span class="n">ServerKV</span><span class="p">(</span><span class="n">kv</span><span class="p">,</span> <span class="n">token</span><span class="o">=</span><span class="s1">&#39;supersecret&#39;</span><span class="p">)</span> <span class="c1"># FastAPI</span>
-<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>
-<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="nd">@api</span><span class="o">.</span><span class="n">middleware</span><span class="p">(</span><span class="s1">&#39;http&#39;</span><span class="p">)</span>
-<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="k">async</span> <span class="k">def</span> <span class="nf">auth</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="n">call_next</span><span class="p">):</span>
-<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>  <span class="n">token</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">query_params</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;token&#39;</span><span class="p">)</span>
-<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>  <span class="k">if</span> <span class="n">token</span> <span class="o">!=</span> <span class="s1">&#39;supersecret&#39;</span><span class="p">:</span>
-<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>    <span class="k">return</span> <span class="n">JSONResponse</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">401</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;error&#39;</span><span class="p">:</span> <span class="s1">&#39;Unauthorized&#39;</span><span class="p">})</span>
-<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a>  <span class="k">return</span> <span class="k">await</span> <span class="n">call_next</span><span class="p">(</span><span class="n">request</span><span class="p">)</span>
-<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>
-<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>
-<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="n">uvicorn</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">api</span><span class="p">,</span> <span class="n">host</span><span class="o">=</span><span class="s1">&#39;0.0.0.0&#39;</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">8000</span><span class="p">)</span>
-</code></pre></div>
-<h4 id="client_2">Client</h4>
-<p>Pass a custom request function:</p>
-<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">Mapping</span>
-<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="kn">from</span> <span class="nn">kv.http</span> <span class="kn">import</span> <span class="n">ClientKV</span><span class="p">,</span> <span class="n">Request</span>
-<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="k">async</span> <span class="k">def</span> <span class="nf">my_request</span><span class="p">(</span>
-<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>  <span class="bp">self</span><span class="p">,</span> <span class="n">method</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s1">&#39;GET&#39;</span><span class="p">,</span> <span class="s1">&#39;POST&#39;</span><span class="p">,</span> <span class="s1">&#39;DELETE&#39;</span><span class="p">],</span> <span class="n">url</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">/</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span>
-<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>  <span class="n">data</span><span class="p">:</span> <span class="nb">bytes</span> <span class="o">|</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">params</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
-<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Request</span><span class="p">:</span>
-<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>  <span class="o">...</span>
-<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
-<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="n">kv</span> <span class="o">=</span> <span class="n">ClientKV</span><span class="p">(</span><span class="s1">&#39;http://localhost:8000&#39;</span><span class="p">,</span> <span class="n">request</span><span class="o">=</span><span class="n">my_request</span><span class="p">)</span>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span> <span class="nn">datetime</span> <span class="kn">import</span> <span class="n">datetime</span><span class="p">,</span> <span class="n">timedelta</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="kn">from</span> <span class="nn">kv</span> <span class="kn">import</span> <span class="n">KV</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="n">kv</span> <span class="o">=</span> <span class="n">KV</span><span class="o">.</span><span class="n">of</span><span class="p">(</span><span class="s1">&#39;http://localhost:8000?secret=supersecret&#39;</span><span class="p">)</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">kv</span><span class="o">.</span><span class="n">url</span><span class="p">(</span><span class="s1">&#39;key&#39;</span><span class="p">,</span> <span class="n">expiry</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">now</span><span class="p">()</span> <span class="o">+</span> <span class="n">timedelta</span><span class="p">(</span><span class="n">minutes</span><span class="o">=</span><span class="mi">2</span><span class="p">))</span> <span class="c1"># http://localhost:8000/item/key?token=&lt;JWT&gt;</span>
 </code></pre></div>
 
 
