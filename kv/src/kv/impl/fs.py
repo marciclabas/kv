@@ -55,7 +55,7 @@ class FilesystemKV(KV[T], Generic[T]):
     ...
   @classmethod
   def new(cls, base_path: str, type: type[T] | None = None):
-    if type:
+    if type and type is not bytes:
       return FilesystemKV(base_path, extension='.json', **serializers(type))
     else:
       return FilesystemKV(base_path)
