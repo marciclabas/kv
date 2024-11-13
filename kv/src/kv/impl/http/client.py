@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from urllib.parse import quote
 import jwt
 import httpx
-from kv import LocatableKV, KVError, InexistentItem
+from kv import KV, LocatableKV, KVError, InexistentItem
 from ...serialization import Parse, Dump, default, serializers
 
 T = TypeVar('T')
@@ -81,3 +81,52 @@ class ClientKV(LocatableKV[T], Generic[T]):
   
   def prefixed(self, prefix: str):
     return ClientKV(endpoint=self.endpoint, parse=self.parse, dump=self.dump, secret=self.secret, prefix_=self.prefix_ + '/' + prefix)
+  
+
+@dataclass
+class Served(LocatableKV[T], Generic[T]):
+  base_url: str
+  kv: KV[T]
+  prefix_: str = ''
+  secret: str | None = None
+
+  def url(self, key: str, /, *, expiry: datetime | None = None) -> str:
+    url = f"{self.base_url.rstrip('/')}/item/{quote(key)}?"
+    if self.prefix_:
+      url += f"prefix={quote(self.prefix_)}&"
+    if self.secret:
+      url += f"token={quote(sign_token(self.secret, expiry))}"
+    return url
+  
+  def prefixed(self, prefix: str):
+    return Served(self.base_url, self.kv, self.prefix_ + '/' + prefix) # type: ignore
+  
+  def insert(self, key, value):
+    return self.kv.prefix(self.prefix_).insert(key, value)
+  
+  def read(self, key):
+    return self.kv.prefix(self.prefix_).read(key)
+  
+  def delete(self, key):
+    return self.kv.prefix(self.prefix_).delete(key)
+  
+  def keys(self):
+    return self.kv.prefix(self.prefix_).keys()
+  
+  def items(self):
+    return self.kv.prefix(self.prefix_).items()
+  
+  def values(self):
+    return self.kv.prefix(self.prefix_).values()
+  
+  def has(self, key):
+    return self.kv.prefix(self.prefix_).has(key)
+  
+  def copy(self, key, to, to_key):
+    return self.kv.prefix(self.prefix_).copy(key, to, to_key)
+  
+  def move(self, key, to, to_key):
+    return self.kv.prefix(self.prefix_).move(key, to, to_key)
+  
+  def clear(self):
+    return self.kv.prefix(self.prefix_).clear()

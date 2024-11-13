@@ -1,4 +1,4 @@
 from .server import ServerKV
-from .client import ClientKV
+from .client import ClientKV, Served
 
-__all__ = ['ServerKV', 'ClientKV']
+__all__ = ['ServerKV', 'ClientKV', 'Served']

@@ -20,9 +20,14 @@ def ServerKV(kv: KV[T], *, type: type[T], secret: str | None = None):
   app = FastAPI(generate_unique_id_function=lambda r: r.name)
 
   if type is not bytes:
-    parse = TypeAdapter(type).validate_json
+    adapter = TypeAdapter(type)
+    parse = adapter.validate_json
+    dump = adapter.dump_json
+    media_type = 'application/json'
   else:
     parse = lambda x: x
+    dump = lambda x: x
+    media_type = 'application/octet-stream'
 
   if secret:
     @app.middleware('http')
@@ -42,9 +47,10 @@ def ServerKV(kv: KV[T], *, type: type[T], secret: str | None = None):
     await _kv(prefix).insert(key, value)
 
   @app.get('/item/{key:path}')
-  async def read(key: str, *, prefix: str = '') -> T:
+  async def read(key: str, *, prefix: str = ''):
     try:
-      return await _kv(prefix).read(key)
+      item = await _kv(prefix).read(key)
+      return Response(content=dump(item), media_type=media_type)
     except InexistentItem:
       raise HTTPException(status_code=404, detail=f'Inexistent Item "{key}"')
   

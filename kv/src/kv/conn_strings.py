@@ -1,4 +1,4 @@
-from typing_extensions import TypeVar, overload, Any
+from typing_extensions import TypeVar, Any
 from urllib.parse import urlparse, parse_qs, unquote
 from pydantic import BaseModel
 from kv import KV
@@ -44,13 +44,7 @@ class CosmosParams(Params):
 class SQLParams(Params):
   table: str
 
-@overload
-def parse(conn_str: str) -> KV[bytes]:
-  ...
-@overload
-def parse(conn_str: str, type: type[T] | None = None) -> KV[T]:
-  ...
-def parse(conn_str: str, type: type[T] | None = None): # type: ignore
+def parse(conn_str: str, type: type[T]) -> KV[T]:
   parsed_url = urlparse(conn_str) # 'file://path/to/base?prefix=hello'
   scheme = parsed_url.scheme # 'file'
   netloc = parsed_url.netloc # 'path'
@@ -107,4 +101,4 @@ def parse(conn_str: str, type: type[T] | None = None): # type: ignore
   else:
     raise ValueError(f'Unknown scheme: {scheme}')
   
-  return kv.prefixed(params.prefix) if params.prefix else kv
+  return kv.prefixed(params.prefix) if params.prefix else kv # type: ignore

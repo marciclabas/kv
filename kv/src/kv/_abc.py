@@ -30,7 +30,7 @@ class KV(ABC, Generic[T]):
   """Async, exception-free key-value store ABC"""
   
   @staticmethod
-  def of(conn_str: str, type: type[U] | None = None) -> 'KV[U]':
+  def of(conn_str: str, type: type[U]) -> 'KV[U]':
     """
     Create a KV (Key-Value) store instance from a connection string.
 
@@ -140,7 +140,7 @@ class KV(ABC, Generic[T]):
       kv = kv.prefixed(p)
     return kv
 
-  def served(self, base_url: str) -> 'LocatableKV[T]':
+  def served(self, base_url: str, *, secret: str | None = None) -> 'LocatableKV[T]':
     """Create a `LocatableKV` assuming `self` is being served at `base_url`
     
     Example:
@@ -156,54 +156,11 @@ class KV(ABC, Generic[T]):
     uvicorn.run(api, host=host, port=port)
     ```
     """
-    return Served(base_url, self)
+    from kv import Served
+    return Served(base_url, self, secret=secret)
 
 class LocatableKV(KV[T], Generic[T]):
   @abstractmethod
   def url(self, key: str, /, *, expiry: 'datetime | None' = None) -> str:
     ...
 
-
-@dataclass
-class Served(LocatableKV[T], Generic[T]):
-  base_url: str
-  kv: KV[T]
-  prefix_: str = ''
-
-  def url(self, key: str, /, *, expiry: 'datetime | None' = None) -> str:
-    from urllib.parse import quote
-    return f"{self.base_url.rstrip('/')}/read?key={quote(key)}&prefix={quote(self.prefix_)}"
-  
-  def prefixed(self, prefix: str):
-    return Served(self.base_url, self.kv, self.prefix_ + '/' + prefix) # type: ignore
-  
-  def insert(self, key, value):
-    return self.kv.prefix(self.prefix_).insert(key, value)
-  
-  def read(self, key):
-    return self.kv.prefix(self.prefix_).read(key)
-  
-  def delete(self, key):
-    return self.kv.prefix(self.prefix_).delete(key)
-  
-  def keys(self):
-    return self.kv.prefix(self.prefix_).keys()
-  
-  def items(self):
-    return self.kv.prefix(self.prefix_).items()
-  
-  def values(self):
-    return self.kv.prefix(self.prefix_).values()
-  
-  def has(self, key):
-    return self.kv.prefix(self.prefix_).has(key)
-  
-  def copy(self, key, to, to_key):
-    return self.kv.prefix(self.prefix_).copy(key, to, to_key)
-  
-  def move(self, key, to, to_key):
-    return self.kv.prefix(self.prefix_).move(key, to, to_key)
-  
-  def clear(self):
-    return self.kv.prefix(self.prefix_).clear()
-  
