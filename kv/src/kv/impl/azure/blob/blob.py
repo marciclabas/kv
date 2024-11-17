@@ -34,7 +34,7 @@ class BlobKV(LocatableKV[T], Generic[T]):
   def new(client: Callable[[], BlobServiceClient], type: type[U] | None, *, split_key: Callable[[str], tuple[str, str]] = default_split) -> 'BlobKV[U]':
     return (
       BlobKV(client, split_key, **serializers(type))
-      if type else BlobKV(client, split_key)
+      if type and type is not bytes else BlobKV(client, split_key)
     )
   
   @staticmethod

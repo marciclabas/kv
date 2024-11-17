@@ -1,4 +1,4 @@
-from typing import TypeVar, Any
+from typing import TypeVar
 from datetime import datetime
 from pydantic import TypeAdapter
 import jwt

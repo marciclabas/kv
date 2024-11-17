@@ -39,7 +39,7 @@ class BlobContainerKV(LocatableKV[T], Generic[T]):
   def new(client: Callable[[], BlobServiceClient], type: type[U] | None = None, *, container: str) -> 'BlobContainerKV[U]':
     return (
       BlobContainerKV(client, container, **serializers(type))
-      if type else BlobContainerKV(client, container)
+      if type and type is not bytes else BlobContainerKV(client, container)
     )
 
   @staticmethod

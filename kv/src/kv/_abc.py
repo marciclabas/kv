@@ -107,6 +107,10 @@ class KV(ABC, Generic[T]):
     await self.copy(key, to, to_key)
     await self.delete(key)
 
+  async def rename(self, key: str, new_key: str):
+    """Rename `key` to `new_key`"""
+    await self.move(key, self, new_key)
+
   async def copy_all(self, to: 'KV[T]', *, max_concurrent: int = 16):
     import asyncio
     sem = asyncio.Semaphore(max_concurrent)

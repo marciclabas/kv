@@ -1,5 +1,5 @@
 from typing import TypeVar, Generic, Callable, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from azure.cosmos.aio import CosmosClient
 from azure.cosmos.exceptions import CosmosResourceNotFoundError
 from kv import KVError, KV
@@ -12,11 +12,13 @@ L = TypeVar('L')
 @dataclass
 class CosmosPartitionKV(KV[T], ContainerMixin[T], Generic[T]):
   partition_key: str
+  prefix_: str = ''
 
   def __repr__(self):
     return f'''CosmosPartitionKV(
   endpoint={self.client().client_connection.url_connection},
-  database={self.db}, container={self.container}, partition_key={self.partition_key}
+  database={self.db}, container={self.container}, partition_key={self.partition_key},
+  prefix={self.prefix_!r},
 )'''
 
   @staticmethod
@@ -73,8 +75,9 @@ class CosmosPartitionKV(KV[T], ContainerMixin[T], Generic[T]):
   async def keys(self):
     try:
       async with self.container_manager() as cc:
-        query = 'SELECT c.id FROM c'
-        async for item in cc.query_items(query=query, partition_key=self.partition_key):
+        query = 'SELECT c.id FROM c WHERE STARTSWITH(c["key"], @prefix)'
+        params: list[dict] = [{'name': '@prefix', 'value': self.prefix_}]
+        async for item in cc.query_items(query=query, parameters=params, partition_key=self.partition_key):
           yield decode(item['id'])
     except CosmosResourceNotFoundError:
       ...
@@ -99,3 +102,7 @@ class CosmosPartitionKV(KV[T], ContainerMixin[T], Generic[T]):
         await cc.delete_all_items_by_partition_key(self.partition_key)
     except CosmosResourceNotFoundError:
       ...
+
+  def prefixed(self, prefix: str):
+    new_prefix = self.prefix_.rstrip('/') + '/' + prefix
+    return replace(self, prefix_=new_prefix.lstrip('/'))
