@@ -75,10 +75,10 @@ class CosmosPartitionKV(KV[T], ContainerMixin[T], Generic[T]):
   async def keys(self):
     try:
       async with self.container_manager() as cc:
-        query = 'SELECT c.id FROM c WHERE STARTSWITH(c["key"], @prefix)'
+        query = 'SELECT c["key"] FROM c WHERE STARTSWITH(c["key"], @prefix)'
         params: list[dict] = [{'name': '@prefix', 'value': self.prefix_}]
         async for item in cc.query_items(query=query, parameters=params, partition_key=self.partition_key):
-          yield decode(item['id'])
+          yield item['key'].removeprefix(self.prefix_)
     except CosmosResourceNotFoundError:
       ...
     except Exception as e:
@@ -104,5 +104,5 @@ class CosmosPartitionKV(KV[T], ContainerMixin[T], Generic[T]):
       ...
 
   def prefixed(self, prefix: str):
-    new_prefix = self.prefix_.rstrip('/') + '/' + prefix
+    new_prefix = self.prefix_.rstrip('/') + '/' + prefix.strip('/')
     return replace(self, prefix_=new_prefix.lstrip('/'))

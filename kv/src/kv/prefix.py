@@ -23,8 +23,7 @@ class PrefixedKV(KV[T], Generic[T]):
   
   async def keys(self):
     async for key in self.kv.keys():
-      if key.startswith(self.prefix_):
-        yield key.removeprefix(self.prefix_)
+      yield key.removeprefix(self.prefix_)
 
   def url(self, key: str, /, *, expiry=None):
     if not isinstance(self.kv, LocatableKV):
