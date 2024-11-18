@@ -24,8 +24,11 @@ class ClientKV(LocatableKV[T], Generic[T]):
   prefix_: str = ''
 
   @classmethod
-  def new(cls, endpoint: str, type: type[U] | None = None, *, secret: str | None = None) -> 'ClientKV[U]':
-    return ClientKV(endpoint, **serializers(type), secret=secret) if type else ClientKV(endpoint, secret=secret)
+  def new(cls, endpoint: str, type: type[U], *, secret: str | None = None) -> 'ClientKV[U]':
+    return (
+      ClientKV(endpoint, **serializers(type), secret=secret)
+      if type is not bytes else ClientKV(endpoint, secret=secret)
+    )
     
   def __repr__(self):
     return f'ClientKV({self.endpoint}, prefix={self.prefix_})'
@@ -70,6 +73,11 @@ class ClientKV(LocatableKV[T], Generic[T]):
       raise KVError(r.text)
     for key in r.json():
       yield key
+
+  async def clear(self):
+    r = await self._req('DELETE', '/')
+    if r.status_code != 200:
+      raise KVError(r.text)
   
   def url(self, key: str, /, *, expiry: datetime | None = None) -> str:
     url = f"{self.endpoint.rstrip('/')}/item/{quote(key)}?"
@@ -80,7 +88,8 @@ class ClientKV(LocatableKV[T], Generic[T]):
     return url
   
   def prefixed(self, prefix: str):
-    return ClientKV(endpoint=self.endpoint, parse=self.parse, dump=self.dump, secret=self.secret, prefix_=self.prefix_ + '/' + prefix)
+    new_prefix = self.prefix_ + '/' + prefix if self.prefix_ else prefix
+    return ClientKV(endpoint=self.endpoint, parse=self.parse, dump=self.dump, secret=self.secret, prefix_=new_prefix)
   
 
 @dataclass
@@ -99,7 +108,8 @@ class Served(LocatableKV[T], Generic[T]):
     return url
   
   def prefixed(self, prefix: str):
-    return Served(self.base_url, self.kv, self.prefix_ + '/' + prefix) # type: ignore
+    new_prefix = self.prefix_ + '/' + prefix if self.prefix_ else prefix
+    return Served(self.base_url, self.kv, new_prefix)
   
   def insert(self, key, value):
     return self.kv.prefix(self.prefix_).insert(key, value)

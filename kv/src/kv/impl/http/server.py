@@ -73,6 +73,7 @@ def ServerKV(kv: KV[T], *, type: type[T], secret: str | None = None):
   
   @app.delete('/')
   async def clear(prefix: str = ''):
+    print(f'Deleting at prefix: {prefix}')
     await _kv(prefix).clear()
 
   return app

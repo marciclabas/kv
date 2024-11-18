@@ -131,7 +131,7 @@ class KV(ABC, Generic[T]):
   def prefixed(self, prefix: str, /) -> 'Self':
     """Create a `KV` with all keys prefixed with `prefix`, without nesting."""
     from .prefix import PrefixedKV
-    return PrefixedKV(prefix.rstrip('/') + '/', self) # type: ignore
+    return PrefixedKV(prefix, self) # type: ignore
   
   def prefix(self, prefix: str, /) -> 'Self':
     """Nested prefix. Supports slashes in `prefix`.
