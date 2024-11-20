@@ -1,5 +1,5 @@
 from typing import TypeVar, Generic
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from kv import KV, LocatableKV, KVError
 
 T = TypeVar('T')
@@ -21,9 +21,14 @@ class PrefixedKV(KV[T], Generic[T]):
   def has(self, key: str):
     return self.kv.has(self.prefix_ + key)
   
+  def prefixed(self, prefix: str):
+    new_prefix = self.prefix_.rstrip('/') + '/' + prefix.strip('/')
+    return replace(self, prefix_=new_prefix.lstrip('/'))
+  
   async def keys(self):
     async for key in self.kv.keys():
-      yield key.removeprefix(self.prefix_)
+      if key.startswith(self.prefix_):
+        yield key.removeprefix(self.prefix_)
 
   def url(self, key: str, /, *, expiry=None):
     if not isinstance(self.kv, LocatableKV):
