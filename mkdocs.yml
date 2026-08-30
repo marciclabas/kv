@@ -13,7 +13,6 @@ nav:
   - Prefixing: prefixing.md
   - Backends:
     - Filesystem: backends/filesystem.md
-    - SQLite: backends/sqlite.md
     - SQL: backends/sql.md
     - Azure Blob Storage: backends/blob.md
     - Azure Cosmos DB: backends/cosmos.md
